@@ -1,4 +1,3 @@
-
 import * as Blockly from 'blockly/core';
 import { javascriptGenerator } from 'blockly/javascript'; // Import the generator
 
@@ -56,17 +55,17 @@ const defineCustomBlocks = () => {
 
   // Generator for SQL using the imported javascriptGenerator
   javascriptGenerator['sql_select'] = function (block: Blockly.Block) {
-    const columns = javascriptGenerator.valueToCode(block, 'COLUMNS', javascriptGenerator.ORDER_ATOMIC) || '*';
+    const columns = javascriptGenerator.valueToCode(block, 'COLUMNS', javascriptGenerator.Order.ATOMIC) || '*';
     return `SELECT ${columns}\n`;
   };
 
   javascriptGenerator['sql_from'] = function (block: Blockly.Block) {
-    const table = javascriptGenerator.valueToCode(block, 'TABLE', javascriptGenerator.ORDER_ATOMIC) || 'your_table';
+    const table = javascriptGenerator.valueToCode(block, 'TABLE', javascriptGenerator.Order.ATOMIC) || 'your_table';
     return `FROM ${table}\n`;
   };
 
   javascriptGenerator['sql_where'] = function (block: Blockly.Block) {
-    const condition = javascriptGenerator.valueToCode(block, 'CONDITION', javascriptGenerator.ORDER_ATOMIC) || 'your_condition';
+    const condition = javascriptGenerator.valueToCode(block, 'CONDITION', javascriptGenerator.Order.ATOMIC) || 'your_condition';
     return `WHERE ${condition}\n`;
   };
   
