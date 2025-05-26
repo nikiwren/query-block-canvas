@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -99,3 +100,57 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Blockly specific styles to ensure it displays correctly */
+.blocklyToolboxDiv {
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  border-right: 1px solid hsl(var(--border));
+}
+.blocklyTreeRow:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+.blocklyTreeRow.blocklyTreeSelected {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+.blocklyFlyoutBackground {
+ fill: hsl(var(--popover));
+ fill-opacity: .8;
+}
+.blocklyScrollbarHandle {
+  fill: hsl(var(--muted));
+}
+.blocklyScrollbarBackground {
+  fill: hsl(var(--background));
+}
+.blocklyInsertionMarker .blocklyPath, .blocklyPathDark {
+  fill: gold;
+  stroke: gold;
+}
+.blocklyHighlightedConnectionPath {
+  stroke: gold;
+}
+.blocklyFlyout .blocklyText {
+  fill: hsl(var(--popover-foreground)) !important; /* Important to override Blockly defaults */
+}
+.blocklyToolboxDiv .blocklyTreeLabel {
+  color: hsl(var(--card-foreground)) !important; /* Ensure toolbox category labels are visible */
+}
+
+/* Ensure Blockly SVG elements don't get unwanted Tailwind base styles */
+.blocklySvg svg {
+  display: block; /* Override Tailwind's inline-block for SVGs if needed */
+}
+
+/* Adjust .goog-tooltip to match theme if necessary, default styling might be okay */
+.goog-tooltip {
+  background-color: hsl(var(--popover)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  padding: 0.5rem !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; /* Example shadow */
+  z-index: 10000 !important; /* High z-index for tooltips */
+}
+
