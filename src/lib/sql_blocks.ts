@@ -1,5 +1,6 @@
 
 import * as Blockly from 'blockly/core';
+import { javascriptGenerator } from 'blockly/javascript'; // Import the generator
 
 // Define custom block types
 const defineCustomBlocks = () => {
@@ -53,27 +54,26 @@ const defineCustomBlocks = () => {
     },
   };
 
-  // Generator for SQL
-  Blockly.JavaScript['sql_select'] = function (block) {
-    const columns = Blockly.JavaScript.valueToCode(block, 'COLUMNS', Blockly.JavaScript.ORDER_ATOMIC) || '*';
+  // Generator for SQL using the imported javascriptGenerator
+  javascriptGenerator['sql_select'] = function (block: Blockly.Block) {
+    const columns = javascriptGenerator.valueToCode(block, 'COLUMNS', javascriptGenerator.ORDER_ATOMIC) || '*';
     return `SELECT ${columns}\n`;
   };
 
-  Blockly.JavaScript['sql_from'] = function (block) {
-    const table = Blockly.JavaScript.valueToCode(block, 'TABLE', Blockly.JavaScript.ORDER_ATOMIC) || 'your_table';
+  javascriptGenerator['sql_from'] = function (block: Blockly.Block) {
+    const table = javascriptGenerator.valueToCode(block, 'TABLE', javascriptGenerator.ORDER_ATOMIC) || 'your_table';
     return `FROM ${table}\n`;
   };
 
-  Blockly.JavaScript['sql_where'] = function (block) {
-    const condition = Blockly.JavaScript.valueToCode(block, 'CONDITION', Blockly.JavaScript.ORDER_ATOMIC) || 'your_condition';
+  javascriptGenerator['sql_where'] = function (block: Blockly.Block) {
+    const condition = javascriptGenerator.valueToCode(block, 'CONDITION', javascriptGenerator.ORDER_ATOMIC) || 'your_condition';
     return `WHERE ${condition}\n`;
   };
   
-  Blockly.JavaScript['sql_query'] = function (block) {
-    const selectStatement = Blockly.JavaScript.statementToCode(block, 'SELECT');
+  javascriptGenerator['sql_query'] = function (block: Blockly.Block) {
+    const selectStatement = javascriptGenerator.statementToCode(block, 'SELECT');
     return selectStatement;
   };
 };
 
 export default defineCustomBlocks;
-

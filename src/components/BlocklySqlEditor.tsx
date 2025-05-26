@@ -1,8 +1,8 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks'; // Import standard blocks
 import 'blockly/javascript'; // Import JavaScript generator
+import { javascriptGenerator } from 'blockly/javascript'; // Explicit import
 import defineCustomBlocks from '@/lib/sql_blocks';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -43,14 +43,12 @@ const BlocklySqlEditor: React.FC = () => {
     </xml>
   `;
   const [generatedSql, setGeneratedSql] = useState<string>('');
-  let workspace: Blockly.WorkspaceSvg | null = null;
+  // Use a Ref to hold the workspace instance to avoid issues with state/re-renders
+  const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
 
   useEffect(() => {
-    if (blocklyDiv.current && !workspace) {
-      // Ensure custom blocks are defined before workspace initialization
-      // defineCustomBlocks() is called globally now, which is fine for this setup.
-
-      workspace = Blockly.inject(blocklyDiv.current, {
+    if (blocklyDiv.current && !workspaceRef.current) {
+      workspaceRef.current = Blockly.inject(blocklyDiv.current, {
         toolbox: toolboxXml,
         grid: {
           spacing: 20,
@@ -75,24 +73,26 @@ const BlocklySqlEditor: React.FC = () => {
       });
 
       const onWorkspaceChange = () => {
-        if (workspace) {
-          // @ts-ignore Blockly.JavaScript might not be fully typed
-          const code = Blockly.JavaScript.workspaceToCode(workspace);
+        if (workspaceRef.current) {
+          const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
           setGeneratedSql(code);
         }
       };
-      workspace.addChangeListener(onWorkspaceChange);
+      workspaceRef.current.addChangeListener(onWorkspaceChange);
     }
 
-    return () => {
-      // workspace?.dispose(); // This can cause issues with HMR if not handled carefully
-    };
+    // It's generally good practice to dispose of the workspace on unmount,
+    // but ensure this doesn't interfere with HMR if it causes issues.
+    // For now, let's keep it commented as per the original code's caution.
+    // return () => {
+    //   workspaceRef.current?.dispose();
+    //   workspaceRef.current = null;
+    // };
   }, []); // Empty dependency array ensures this runs once on mount
 
   const handleGenerateSql = () => {
-    if (workspace) {
-      // @ts-ignore
-      const code = Blockly.JavaScript.workspaceToCode(workspace);
+    if (workspaceRef.current) {
+      const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
       setGeneratedSql(code);
       console.log('Generated SQL:', code);
     }
@@ -131,4 +131,3 @@ const BlocklySqlEditor: React.FC = () => {
 };
 
 export default BlocklySqlEditor;
-
