@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks'; // Import standard blocks
@@ -7,7 +6,6 @@ import defineCustomBlocks from '@/lib/sql_blocks';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-// import { Separator } from '@/components/ui/separator'; // Separator not used in current layout
 
 // Call defineCustomBlocks to register them with Blockly
 defineCustomBlocks();
@@ -18,12 +16,6 @@ const BlocklySqlEditor: React.FC = () => {
     <xml xmlns="https://developers.google.com/blockly/xml">
       <category name="Query Builder" colour="290">
         <block type="sql_query"></block>
-      </category>
-      <sep></sep>
-      <category name="SQL Clauses" colour="230">
-        <block type="sql_select"></block>
-        <block type="sql_from"></block>
-        <block type="sql_where"></block>
       </category>
       <sep></sep>
       <category name="Building Blocks" colour="65">
@@ -111,7 +103,6 @@ const BlocklySqlEditor: React.FC = () => {
 
       const onWorkspaceChange = () => {
         if (workspaceRef.current) {
-          // Ensure javascriptGenerator is fully initialized if it has async parts, though usually it's synchronous.
           const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
           setGeneratedSql(code);
         }
@@ -170,4 +161,3 @@ const BlocklySqlEditor: React.FC = () => {
 };
 
 export default BlocklySqlEditor;
-
