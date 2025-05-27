@@ -1,6 +1,23 @@
-
 import * as Blockly from 'blockly/core';
 import { javascriptGenerator, Order } from 'blockly/javascript';
+
+// Define interfaces for custom block properties and methods
+interface ISqlColumnListBlock extends Blockly.Block {
+  itemCount_: number;
+  updateShape_: () => void;
+  // The following are standard mutator methods, but defining them on the interface
+  // helps ensure they are correctly implemented by blocks using this pattern.
+  // They are implicitly part of the block's definition if this block is a mutator.
+  mutationToDom: () => Element;
+  domToMutation: (xmlElement: Element) => void;
+  decompose: (workspace: Blockly.WorkspaceSvg) => Blockly.Block;
+  compose: (containerBlock: Blockly.Block) => void;
+  saveConnections: (containerBlock: Blockly.Block) => void;
+}
+
+interface IMutatorItemBlock extends Blockly.Block {
+  valueConnection_?: Blockly.Connection | null;
+}
 
 // Define custom block types
 const defineCustomBlocks = () => {
@@ -66,25 +83,25 @@ const defineCustomBlocks = () => {
 
   // Custom list block for SQL columns
   Blockly.Blocks['sql_column_list'] = {
-    init: function() {
+    init: function(this: ISqlColumnListBlock) {
       this.setHelpUrl(Blockly.Msg['LISTS_CREATE_WITH_HELPURL'] || '');
       this.setColour(260); // Standard list color
       this.itemCount_ = 2; // Default number of item inputs
       this.updateShape_();
       this.setOutput(true, 'Array'); // Outputs an array, compatible with sql_query's SELECT input
-      this.setMutator(new Blockly.Mutator(['lists_create_with_item'])); // Reuses standard list mutator item
+      this.setMutator(new Blockly.icons.MutatorIcon(['lists_create_with_item'], this)); // Corrected Mutator usage
       this.setTooltip(Blockly.Msg['LISTS_CREATE_WITH_TOOLTIP'] || 'Create a list of columns.');
     },
-    mutationToDom: function() {
+    mutationToDom: function(this: ISqlColumnListBlock) {
       const container = Blockly.utils.xml.createElement('mutation');
       container.setAttribute('items', String(this.itemCount_));
       return container;
     },
-    domToMutation: function(xmlElement) {
+    domToMutation: function(this: ISqlColumnListBlock, xmlElement: Element) {
       this.itemCount_ = parseInt(xmlElement.getAttribute('items') || '0', 10);
       this.updateShape_();
     },
-    decompose: function(workspace: Blockly.WorkspaceSvg) {
+    decompose: function(this: ISqlColumnListBlock, workspace: Blockly.WorkspaceSvg) {
       const containerBlock = workspace.newBlock('lists_create_with_container');
       containerBlock.initSvg();
       let connection = containerBlock.getInput('STACK')?.connection;
@@ -98,13 +115,14 @@ const defineCustomBlocks = () => {
       }
       return containerBlock;
     },
-    compose: function(containerBlock) {
+    compose: function(this: ISqlColumnListBlock, containerBlock: Blockly.Block) {
       let itemBlock = containerBlock.getInputTargetBlock('STACK');
       const connections: (Blockly.Connection | null)[] = [];
       while (itemBlock) {
-        connections.push(itemBlock.valueConnection_);
+        connections.push((itemBlock as IMutatorItemBlock).valueConnection_ ?? null); // Cast itemBlock
         itemBlock = itemBlock.nextConnection && itemBlock.nextConnection.targetBlock();
       }
+      // Disconnect any dragging blocks that were dropped elsewhere.
       for (let i = 0; i < this.itemCount_; i++) {
         const connection = this.getInput('ADD' + i)?.connection?.targetConnection;
         if (connection && connections.indexOf(connection) === -1) {
@@ -113,29 +131,31 @@ const defineCustomBlocks = () => {
       }
       this.itemCount_ = connections.length;
       this.updateShape_();
+      // Reconnect any child blocks.
       for (let i = 0; i < this.itemCount_; i++) {
         Blockly.Mutator.reconnect(connections[i], this, 'ADD' + i);
       }
     },
-    saveConnections: function(containerBlock) {
+    saveConnections: function(this: ISqlColumnListBlock, containerBlock: Blockly.Block) {
       let itemBlock = containerBlock.getInputTargetBlock('STACK');
       let i = 0;
       while (itemBlock) {
         const input = this.getInput('ADD' + i);
         if (input && itemBlock) {
-            (itemBlock as any).valueConnection_ = input.connection?.targetConnection;
+            (itemBlock as IMutatorItemBlock).valueConnection_ = input.connection?.targetConnection; // Cast itemBlock
         }
         i++;
         itemBlock = itemBlock.nextConnection && itemBlock.nextConnection.targetBlock();
       }
     },
-    updateShape_: function() {
+    updateShape_: function(this: ISqlColumnListBlock) {
       if (this.itemCount_ && this.getInput('EMPTY')) {
         this.removeInput('EMPTY');
       } else if (!this.itemCount_ && !this.getInput('EMPTY')) {
         this.appendDummyInput('EMPTY')
             .appendField(Blockly.Msg['LISTS_CREATE_EMPTY_TITLE'] || 'create empty list');
       }
+      // Add new inputs.
       for (let i = 0; i < this.itemCount_; i++) {
         if (!this.getInput('ADD' + i)) {
           const input = this.appendValueInput('ADD' + i)
@@ -146,21 +166,24 @@ const defineCustomBlocks = () => {
           input.setCheck('SpecificColumn'); // Crucially, only accept 'SpecificColumn'
         }
       }
+      // Remove deleted inputs.
       for (let i = this.itemCount_; this.getInput('ADD' + i); i++) {
         this.removeInput('ADD' + i);
       }
     }
   };
 
-  // The generator for sql_column_list can be the same as for lists_create_with
+  // The generator for sql_column_list
   if (javascriptGenerator.forBlock['lists_create_with']) {
+    // Prefer the standard list generator if available, as it's well-tested.
     javascriptGenerator.forBlock['sql_column_list'] = javascriptGenerator.forBlock['lists_create_with'];
   } else {
-    // Fallback generator if lists_create_with generator is not found (should not happen with standard Blockly)
+    // Fallback generator (should ideally not be needed if 'blockly/blocks' and 'blockly/javascript' are imported)
     javascriptGenerator.forBlock['sql_column_list'] = (block: Blockly.Block) => {
-      const elements = new Array(block.itemCount_);
-      for (let i = 0; i < block.itemCount_; i++) {
-        elements[i] = javascriptGenerator.valueToCode(block, 'ADD' + i, Order.NONE) || 'null';
+      const sqlListBlock = block as ISqlColumnListBlock; // Cast block
+      const elements = new Array(sqlListBlock.itemCount_);
+      for (let i = 0; i < sqlListBlock.itemCount_; i++) {
+        elements[i] = javascriptGenerator.valueToCode(sqlListBlock, 'ADD' + i, Order.NONE) || 'null';
       }
       const code = '[' + elements.join(', ') + ']';
       return [code, Order.ATOMIC];
@@ -194,6 +217,7 @@ const defineCustomBlocks = () => {
       if (colValue && colValue.trim() !== '' && colValue !== 'null') {
         let processedAsJson = false;
         try {
+          // Attempt to parse as JSON (for individual column blocks)
           const parsed = JSON.parse(colValue);
           if (typeof parsed === 'object' && parsed !== null && 'column' in parsed && 'table' in parsed) {
             uniqueColumns.add(String(parsed.column));
@@ -201,39 +225,67 @@ const defineCustomBlocks = () => {
             processedAsJson = true;
           }
         } catch (e) {
-          // Not a JSON object
+          // Not a JSON object, or JSON parsing failed. Treat as plain text or list of JSON strings.
         }
 
         if (!processedAsJson) {
+          // Check if it's an array of JSON strings (from sql_column_list)
+          if (colValue.startsWith('[') && colValue.endsWith(']')) {
+            try {
+              const arr = JSON.parse(colValue);
+              if (Array.isArray(arr)) {
+                arr.forEach(itemStr => {
+                  if (typeof itemStr === 'string') {
+                    try {
+                      const itemParsed = JSON.parse(itemStr);
+                       if (typeof itemParsed === 'object' && itemParsed !== null && 'column' in itemParsed && 'table' in itemParsed) {
+                        uniqueColumns.add(String(itemParsed.column));
+                        uniqueTables.add(String(itemParsed.table));
+                      }
+                    } catch (itemParseError) {
+                      // item is not a JSON string, could be a plain string column name from other sources
+                      if (itemStr.trim() !== '') uniqueColumns.add(itemStr);
+                    }
+                  }
+                });
+                processedAsJson = true; // consider it processed if it was an array structure
+              }
+            } catch (arrayParseError) {
+              // Not a valid JSON array string
+            }
+          }
+        }
+        
+        // Fallback for direct text input if not processed as JSON or JSON array
+        if (!processedAsJson) {
           let textContent = colValue;
+          // Remove quotes if it's a single string literal
           if ((textContent.startsWith("'") && textContent.endsWith("'")) || (textContent.startsWith('"') && textContent.endsWith('"'))) {
             textContent = textContent.substring(1, textContent.length - 1);
           }
           if (textContent.trim() !== '') {
             uniqueColumns.add(textContent);
+            // Cannot derive table from plain text input, user must use column blocks
           }
         }
       }
     };
 
-    const columnsListBlock = block.getInputTargetBlock('COLUMNS');
-    // Updated to check for 'sql_column_list' or 'lists_create_with' (as a fallback/general list)
-    if (columnsListBlock && (columnsListBlock.type === 'sql_column_list' || columnsListBlock.type === 'lists_create_with')) {
-      for (let i = 0; i < (columnsListBlock as any).itemCount_; i++) {
-        const colValue = javascriptGenerator.valueToCode(columnsListBlock, 'ADD' + i, Order.NONE);
-        processColumnInput(colValue);
-      }
-    } else {
-      const directColumnValue = javascriptGenerator.valueToCode(block, 'COLUMNS', Order.NONE);
-      processColumnInput(directColumnValue);
-    }
+    // Get the code from the 'COLUMNS' input. This could be a single column block or a 'sql_column_list'
+    const columnsInputValue = javascriptGenerator.valueToCode(block, 'COLUMNS', Order.NONE);
+    processColumnInput(columnsInputValue);
+
 
     let columnsStr = uniqueColumns.size > 0 ? Array.from(uniqueColumns).join(', ') : '*';
     
-    if (uniqueTables.size === 0 && columnsStr !== '*') {
-        return [`-- ERROR: No tables could be derived. Use column blocks from 'Table: ...' categories with "select columns" block.\nSELECT ${columnsStr}\nFROM ...`, Order.ATOMIC];
+    if (uniqueTables.size === 0 && columnsStr !== '*' && columnsInputValue && columnsInputValue !== 'null' && columnsInputValue.trim() !== '') {
+        return [`-- ERROR: No tables could be derived. Ensure you use column blocks (e.g., rtable1.rcol11) within the "select columns" block.\nSELECT ${columnsStr}\nFROM ... (table unknown)`, Order.ATOMIC];
     }
     if (uniqueTables.size === 0 && columnsStr === '*') {
+         return [`-- Use "select columns" block for SELECT. Drag column blocks (e.g., rtable1.rcol11) into it.\n-- Tables are added to FROM automatically.`, Order.ATOMIC];
+    }
+    if (uniqueTables.size === 0 && (!columnsInputValue || columnsInputValue === 'null' || columnsInputValue.trim() === '')) {
+         // Handles case where COLUMNS input is empty
          return [`-- Use "select columns" block for SELECT. Drag column blocks (e.g., rtable1.rcol11) into it.\n-- Tables are added to FROM automatically.`, Order.ATOMIC];
     }
 
@@ -242,6 +294,7 @@ const defineCustomBlocks = () => {
 
     const condition = javascriptGenerator.valueToCode(block, 'CONDITION', Order.NONE) || '';
     let conditionStr = condition;
+    // Remove quotes if condition is a single string literal
     if ((condition.startsWith("'") && condition.endsWith("'")) || (condition.startsWith('"') && condition.endsWith('"'))) {
         conditionStr = condition.substring(1, condition.length - 1);
     }
@@ -293,4 +346,3 @@ const defineCustomBlocks = () => {
 };
 
 export default defineCustomBlocks;
-
