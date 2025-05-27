@@ -1,13 +1,13 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks'; // Import standard blocks
-import 'blockly/javascript'; // Import JavaScript generator
 import { javascriptGenerator } from 'blockly/javascript'; // Explicit import
 import defineCustomBlocks from '@/lib/sql_blocks';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+// import { Separator } from '@/components/ui/separator'; // Separator not used in current layout
 
 // Call defineCustomBlocks to register them with Blockly
 defineCustomBlocks();
@@ -16,18 +16,56 @@ const BlocklySqlEditor: React.FC = () => {
   const blocklyDiv = useRef<HTMLDivElement>(null);
   const toolboxXml = `
     <xml xmlns="https://developers.google.com/blockly/xml">
-      <category name="SQL Query" colour="290">
+      <category name="Query Builder" colour="290">
         <block type="sql_query"></block>
       </category>
-      <category name="Clauses" colour="230">
+      <sep></sep>
+      <category name="SQL Clauses" colour="230">
         <block type="sql_select"></block>
         <block type="sql_from"></block>
         <block type="sql_where"></block>
       </category>
-      <category name="Values" colour="100">
+      <sep></sep>
+      <category name="Building Blocks" colour="65">
+        <block type="sql_table_reference"></block>
+        <block type="sql_column_reference"></block>
         <block type="text"></block>
         <block type="math_number">
           <field name="NUM">0</field>
+        </block>
+      </category>
+      <sep></sep>
+      <category name="Lists" colour="%{BKY_LISTS_HUE}">
+        <block type="lists_create_with">
+          <mutation items="2"></mutation>
+        </block>
+        <block type="lists_create_empty"></block>
+        <block type="lists_repeat">
+          <value name="NUM">
+            <shadow type="math_number">
+              <field name="NUM">5</field>
+            </shadow>
+          </value>
+        </block>
+        <block type="lists_length"></block>
+        <block type="lists_isEmpty"></block>
+        <block type="lists_indexOf">
+          <field name="END">FIRST</field>
+          <value name="VALUE">
+            <block type="variables_get">
+              <field name="VAR">{listVariable}</field>
+            </block>
+          </value>
+        </block>
+        <block type="lists_getIndex">
+          <mutation statement="false" at="true"></mutation>
+          <field name="MODE">GET</field>
+          <field name="WHERE">FROM_START</field>
+          <value name="VALUE">
+            <block type="variables_get">
+              <field name="VAR">{listVariable}</field>
+            </block>
+          </value>
         </block>
       </category>
       <sep></sep>
@@ -43,7 +81,6 @@ const BlocklySqlEditor: React.FC = () => {
     </xml>
   `;
   const [generatedSql, setGeneratedSql] = useState<string>('');
-  // Use a Ref to hold the workspace instance to avoid issues with state/re-renders
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
 
   useEffect(() => {
@@ -74,16 +111,18 @@ const BlocklySqlEditor: React.FC = () => {
 
       const onWorkspaceChange = () => {
         if (workspaceRef.current) {
+          // Ensure javascriptGenerator is fully initialized if it has async parts, though usually it's synchronous.
           const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
           setGeneratedSql(code);
         }
       };
       workspaceRef.current.addChangeListener(onWorkspaceChange);
+      
+      // Initial code generation
+      onWorkspaceChange();
     }
 
-    // It's generally good practice to dispose of the workspace on unmount,
-    // but ensure this doesn't interfere with HMR if it causes issues.
-    // For now, let's keep it commented as per the original code's caution.
+    // Basic cleanup on unmount (optional, can be more complex if needed)
     // return () => {
     //   workspaceRef.current?.dispose();
     //   workspaceRef.current = null;
@@ -116,11 +155,11 @@ const BlocklySqlEditor: React.FC = () => {
         <Card className="flex-1 flex flex-col">
           <CardHeader>
             <CardTitle>Generated SQL</CardTitle>
-          </CardHeader>
+          </Header>
           <CardContent className="flex-1 p-0">
             <ScrollArea className="h-full p-4">
               <pre className="text-sm bg-muted p-4 rounded-md whitespace-pre-wrap break-all">
-                {generatedSql || '// Drag blocks to generate SQL'}
+                {generatedSql || '// Drag blocks from the left to build your SQL query.'}
               </pre>
             </ScrollArea>
           </CardContent>
