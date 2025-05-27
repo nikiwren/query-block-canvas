@@ -18,9 +18,16 @@ const BlocklySqlEditor: React.FC = () => {
         <block type="sql_query"></block>
       </category>
       <sep></sep>
-      <category name="Building Blocks" colour="65">
-        <block type="sql_table_reference"></block>
-        <block type="sql_column_reference"></block>
+      <category name="Table: rtable1" colour="160">
+        <block type="rcol11_block"></block>
+        <block type="rcol12_block"></block>
+      </category>
+      <category name="Table: rtable2" colour="180">
+        <block type="rcol21_block"></block>
+        <block type="rcol22_block"></block>
+      </category>
+      <sep></sep>
+      <category name="Text & Numbers" colour="65">
         <block type="text"></block>
         <block type="math_number">
           <field name="NUM">0</field>
@@ -72,7 +79,7 @@ const BlocklySqlEditor: React.FC = () => {
       </category>
     </xml>
   `;
-  const [generatedSql, setGeneratedSql] = useState<string>('');
+  const [generatedSql, setGeneratedSql] = useState<string>('-- Drag column blocks (e.g., rtable1.rcol11) into a list and connect to SELECT.\n-- Tables will be added to FROM automatically.');
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
 
   useEffect(() => {
@@ -103,13 +110,18 @@ const BlocklySqlEditor: React.FC = () => {
 
       const onWorkspaceChange = () => {
         if (workspaceRef.current) {
-          const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
-          setGeneratedSql(code);
+          // Check if there are any blocks on the workspace
+          if (workspaceRef.current.getAllBlocks(false).length === 0) {
+            setGeneratedSql('-- Drag column blocks (e.g., rtable1.rcol11) into a list and connect to SELECT.\n-- Tables will be added to FROM automatically.');
+          } else {
+            const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
+            setGeneratedSql(code || '-- Build your query by dragging blocks.');
+          }
         }
       };
       workspaceRef.current.addChangeListener(onWorkspaceChange);
       
-      // Initial code generation
+      // Initial code generation/placeholder update
       onWorkspaceChange();
     }
 
@@ -122,9 +134,13 @@ const BlocklySqlEditor: React.FC = () => {
 
   const handleGenerateSql = () => {
     if (workspaceRef.current) {
-      const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
-      setGeneratedSql(code);
-      console.log('Generated SQL:', code);
+      if (workspaceRef.current.getAllBlocks(false).length === 0) {
+            setGeneratedSql('-- Drag column blocks (e.g., rtable1.rcol11) into a list and connect to SELECT.\n-- Tables will be added to FROM automatically.');
+      } else {
+        const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
+        setGeneratedSql(code || '-- Build your query by dragging blocks.');
+        console.log('Generated SQL:', code);
+      }
     }
   };
 
@@ -150,7 +166,7 @@ const BlocklySqlEditor: React.FC = () => {
           <CardContent className="flex-1 p-0">
             <ScrollArea className="h-full p-4">
               <pre className="text-sm bg-muted p-4 rounded-md whitespace-pre-wrap break-all">
-                {generatedSql || '// Drag blocks from the left to build your SQL query.'}
+                {generatedSql}
               </pre>
             </ScrollArea>
           </CardContent>
