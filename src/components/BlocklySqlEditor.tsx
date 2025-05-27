@@ -155,7 +155,7 @@ const BlocklySqlEditor: React.FC = () => {
         <Card className="flex-1 flex flex-col">
           <CardHeader>
             <CardTitle>Generated SQL</CardTitle>
-          </Header>
+          </CardHeader>
           <CardContent className="flex-1 p-0">
             <ScrollArea className="h-full p-4">
               <pre className="text-sm bg-muted p-4 rounded-md whitespace-pre-wrap break-all">
@@ -170,3 +170,4 @@ const BlocklySqlEditor: React.FC = () => {
 };
 
 export default BlocklySqlEditor;
+
