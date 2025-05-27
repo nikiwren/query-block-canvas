@@ -34,7 +34,7 @@ const BlocklySqlEditor: React.FC = () => {
         </block>
       </category>
       <sep></sep>
-      <category name="Lists" colour="%{BKY_LISTS_HUE}">
+      <category name="Lists" colour="260"> {/* Standard Blockly Lists HUE */}
         <block type="lists_create_with">
           <mutation items="2"></mutation>
         </block>
@@ -68,7 +68,7 @@ const BlocklySqlEditor: React.FC = () => {
         </block>
       </category>
       <sep></sep>
-       <category name="Logic" colour="%{BKY_LOGIC_HUE}">
+       <category name="Logic" colour="210"> {/* Standard Blockly Logic HUE */}
         <block type="controls_if"></block>
         <block type="logic_compare"></block>
         <block type="logic_operation"></block>

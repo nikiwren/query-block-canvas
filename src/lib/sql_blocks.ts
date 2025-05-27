@@ -1,4 +1,3 @@
-
 import * as Blockly from 'blockly/core';
 import { javascriptGenerator, Order } from 'blockly/javascript';
 
@@ -17,7 +16,8 @@ const defineCustomBlocks = () => {
     },
   };
   javascriptGenerator.forBlock['rcol11_block'] = function (_block: Blockly.Block) {
-    return [{ column: 'rcol11', table: 'rtable1' }, Order.NONE];
+    const data = { column: 'rcol11', table: 'rtable1' };
+    return [JSON.stringify(data), Order.NONE];
   };
 
   Blockly.Blocks['rcol12_block'] = {
@@ -30,7 +30,8 @@ const defineCustomBlocks = () => {
     },
   };
   javascriptGenerator.forBlock['rcol12_block'] = function (_block: Blockly.Block) {
-    return [{ column: 'rcol12', table: 'rtable1' }, Order.NONE];
+    const data = { column: 'rcol12', table: 'rtable1' };
+    return [JSON.stringify(data), Order.NONE];
   };
 
   // For rtable2
@@ -44,7 +45,8 @@ const defineCustomBlocks = () => {
     },
   };
   javascriptGenerator.forBlock['rcol21_block'] = function (_block: Blockly.Block) {
-    return [{ column: 'rcol21', table: 'rtable2' }, Order.NONE];
+    const data = { column: 'rcol21', table: 'rtable2' };
+    return [JSON.stringify(data), Order.NONE];
   };
 
   Blockly.Blocks['rcol22_block'] = {
@@ -57,7 +59,8 @@ const defineCustomBlocks = () => {
     },
   };
   javascriptGenerator.forBlock['rcol22_block'] = function (_block: Blockly.Block) {
-    return [{ column: 'rcol22', table: 'rtable2' }, Order.NONE];
+    const data = { column: 'rcol22', table: 'rtable2' };
+    return [JSON.stringify(data), Order.NONE];
   };
   
   // Main SQL Query Block - FROM clause is now auto-generated
@@ -84,28 +87,46 @@ const defineCustomBlocks = () => {
     const uniqueColumns = new Set<string>();
     const uniqueTables = new Set<string>();
 
+    const processColumnInput = (colValue: string | null) => {
+      if (colValue && colValue.trim() !== '') {
+        let processedAsJson = false;
+        try {
+          // Check if it's a SpecificColumn block output
+          const parsed = JSON.parse(colValue);
+          if (typeof parsed === 'object' && parsed !== null && 'column' in parsed && 'table' in parsed) {
+            uniqueColumns.add(String(parsed.column));
+            uniqueTables.add(String(parsed.table));
+            processedAsJson = true;
+          }
+        } catch (e) {
+          // Not a JSON object from our SpecificColumn blocks, or malformed JSON.
+          // Could be a literal string (e.g., from a text block).
+        }
+
+        if (!processedAsJson) {
+          // Handle plain text block (e.g., from 'text' block) or other string output.
+          // JavaScript generator for 'text' block often returns a quoted string.
+          let textContent = colValue;
+          if ((textContent.startsWith("'") && textContent.endsWith("'")) || (textContent.startsWith('"') && textContent.endsWith('"'))) {
+            textContent = textContent.substring(1, textContent.length - 1);
+          }
+          if (textContent.trim() !== '') {
+            uniqueColumns.add(textContent);
+          }
+        }
+      }
+    };
+
     const columnsListBlock = block.getInputTargetBlock('COLUMNS');
     if (columnsListBlock && columnsListBlock.type === 'lists_create_with') {
       for (let i = 0; i < (columnsListBlock as any).itemCount_; i++) {
-        // Order.NONE is crucial to get the raw object from our SpecificColumn blocks
-        const colData = javascriptGenerator.valueToCode(columnsListBlock, 'ADD' + i, Order.NONE);
-        if (typeof colData === 'object' && colData !== null && 'column' in colData && 'table' in colData) {
-          uniqueColumns.add(String(colData.column));
-          uniqueTables.add(String(colData.table));
-        } else if (colData && typeof colData === 'string' && colData.trim() !== '' && colData.replace(/^["']|["']$/g, '').trim() !== '') {
-          // Handle plain text block as a column, but it won't contribute to table discovery
-          uniqueColumns.add(colData.replace(/^["']|["']$/g, ''));
-        }
+        const colValue = javascriptGenerator.valueToCode(columnsListBlock, 'ADD' + i, Order.NONE);
+        processColumnInput(colValue);
       }
     } else {
       // Handle if COLUMNS input is not a list but a single connected block
-      const directColumnsInput = javascriptGenerator.valueToCode(block, 'COLUMNS', Order.NONE);
-      if (typeof directColumnsInput === 'object' && directColumnsInput !== null && 'column' in directColumnsInput && 'table' in directColumnsInput) {
-        uniqueColumns.add(String(directColumnsInput.column));
-        uniqueTables.add(String(directColumnsInput.table));
-      } else if (directColumnsInput && typeof directColumnsInput === 'string' && directColumnsInput.trim() !== '' && directColumnsInput.replace(/^["']|["']$/g, '').trim() !== '') {
-         uniqueColumns.add(directColumnsInput.replace(/^["']|["']$/g, ''));
-      }
+      const directColumnValue = javascriptGenerator.valueToCode(block, 'COLUMNS', Order.NONE);
+      processColumnInput(directColumnValue);
     }
 
     let columnsStr = uniqueColumns.size > 0 ? Array.from(uniqueColumns).join(', ') : '*';
@@ -120,9 +141,11 @@ const defineCustomBlocks = () => {
     let tablesStr = Array.from(uniqueTables).join(', ');
 
     const condition = javascriptGenerator.valueToCode(block, 'CONDITION', Order.NONE) || '';
-    const conditionStr = condition.startsWith("'") && condition.endsWith("'") || condition.startsWith('"') && condition.endsWith('"') 
-                       ? condition.substring(1, condition.length - 1) 
-                       : condition;
+    // Unquote if it's a string literal from a text block
+    let conditionStr = condition;
+    if ((condition.startsWith("'") && condition.endsWith("'")) || (condition.startsWith('"') && condition.endsWith('"'))) {
+        conditionStr = condition.substring(1, condition.length - 1);
+    }
     
     let query = `SELECT ${columnsStr}\nFROM ${tablesStr}`;
     if (conditionStr.trim()) {
