@@ -1,6 +1,4 @@
-
 import * as Blockly from 'blockly/core';
-import { Mutator } from 'blockly/core'; // Import Mutator directly
 import { javascriptGenerator, Order } from 'blockly/javascript';
 import { ISqlColumnListBlock, IMutatorItemBlock } from './types';
 
@@ -24,7 +22,7 @@ export const defineSqlColumnListBlock = () => {
       this.itemCount_ = parseInt(xmlElement.getAttribute('items') || '0', 10);
       this.updateShape_();
     },
-    decompose: function(this: ISqlColumnListBlock, workspace: Blockly.WorkspaceSvg) {
+    decompose: function(this: ISqlColumnListBlock, workspace: Blockly.WorkspaceSvg): Blockly.BlockSvg {
       const containerBlock = workspace.newBlock('lists_create_with_container');
       containerBlock.initSvg();
       let connection = containerBlock.getInput('STACK')?.connection;
@@ -36,7 +34,7 @@ export const defineSqlColumnListBlock = () => {
           connection = itemBlock.nextConnection;
         }
       }
-      return containerBlock;
+      return containerBlock as Blockly.BlockSvg;
     },
     compose: function(this: ISqlColumnListBlock, containerBlock: Blockly.Block) {
       let itemBlock = containerBlock.getInputTargetBlock('STACK');
@@ -54,8 +52,7 @@ export const defineSqlColumnListBlock = () => {
       this.itemCount_ = connections.length;
       this.updateShape_();
       for (let i = 0; i < this.itemCount_; i++) {
-        // Use imported Mutator directly
-        Mutator.reconnect(connections[i], this, 'ADD' + i);
+        Blockly.Mutator.reconnect(connections[i], this, 'ADD' + i);
       }
     },
     saveConnections: function(this: ISqlColumnListBlock, containerBlock: Blockly.Block) {
