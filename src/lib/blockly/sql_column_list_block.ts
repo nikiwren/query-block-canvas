@@ -1,3 +1,4 @@
+
 import * as Blockly from 'blockly/core';
 import { javascriptGenerator, Order } from 'blockly/javascript';
 import { ISqlColumnListBlock, IMutatorItemBlock } from './types';
@@ -52,7 +53,13 @@ export const defineSqlColumnListBlock = () => {
       this.itemCount_ = connections.length;
       this.updateShape_();
       for (let i = 0; i < this.itemCount_; i++) {
-        Blockly.Mutator.reconnect(connections[i], this, 'ADD' + i);
+        const connection = connections[i];
+        if (connection) {
+          const input = this.getInput('ADD' + i);
+          if (input && input.connection) {
+            input.connection.connect(connection);
+          }
+        }
       }
     },
     saveConnections: function(this: ISqlColumnListBlock, containerBlock: Blockly.Block) {
