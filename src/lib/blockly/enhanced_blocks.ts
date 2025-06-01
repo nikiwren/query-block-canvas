@@ -23,7 +23,7 @@ export const defineEnhancedBlocks = () => {
     }
   };
 
-  javascriptGenerator.forBlock['dynamic_column'] = function (block: any) {
+  javascriptGenerator.forBlock['dynamic_column'] = function (block: any, generator: any) {
     const columnName = block.getFieldValue('COLUMN_NAME');
     const tableName = block.tableName_ || 'unknown_table';
     const data = { column: columnName, table: tableName };
@@ -43,7 +43,7 @@ export const defineEnhancedBlocks = () => {
     }
   };
 
-  javascriptGenerator.forBlock['select_columns'] = function (block: Blockly.Block) {
+  javascriptGenerator.forBlock['select_columns'] = function (block: Blockly.Block, generator: any) {
     const columns: string[] = [];
     const tables = new Set<string>();
     
@@ -58,11 +58,12 @@ export const defineEnhancedBlocks = () => {
       currentBlock = currentBlock.getNextBlock();
     }
 
-    return {
+    const result = {
       columns: columns.length > 0 ? columns.join(', ') : '*',
-      tables: Array.from(tables),
-      code: columns.length > 0 ? columns.join(', ') : '*'
+      tables: Array.from(tables)
     };
+    
+    return [JSON.stringify(result), Order.ATOMIC];
   };
 
   // Aggregation blocks
@@ -80,8 +81,8 @@ export const defineEnhancedBlocks = () => {
     }
   };
 
-  javascriptGenerator.forBlock['count_function'] = function (block: Blockly.Block) {
-    const column = javascriptGenerator.valueToCode(block, 'COLUMN', Order.NONE) || '*';
+  javascriptGenerator.forBlock['count_function'] = function (block: Blockly.Block, generator: any) {
+    const column = generator.valueToCode(block, 'COLUMN', Order.NONE) || '*';
     let columnInfo;
     try {
       columnInfo = JSON.parse(column);
@@ -110,8 +111,8 @@ export const defineEnhancedBlocks = () => {
     }
   };
 
-  javascriptGenerator.forBlock['sum_function'] = function (block: Blockly.Block) {
-    const column = javascriptGenerator.valueToCode(block, 'COLUMN', Order.NONE) || '*';
+  javascriptGenerator.forBlock['sum_function'] = function (block: Blockly.Block, generator: any) {
+    const column = generator.valueToCode(block, 'COLUMN', Order.NONE) || '*';
     let columnInfo;
     try {
       columnInfo = JSON.parse(column);
@@ -139,8 +140,8 @@ export const defineEnhancedBlocks = () => {
     }
   };
 
-  javascriptGenerator.forBlock['group_by'] = function (block: Blockly.Block) {
-    const column = javascriptGenerator.valueToCode(block, 'COLUMN', Order.NONE) || '';
+  javascriptGenerator.forBlock['group_by'] = function (block: Blockly.Block, generator: any) {
+    const column = generator.valueToCode(block, 'COLUMN', Order.NONE) || '';
     let columnInfo;
     try {
       columnInfo = JSON.parse(column);
@@ -166,7 +167,7 @@ export const defineEnhancedBlocks = () => {
     }
   };
 
-  javascriptGenerator.forBlock['enhanced_sql_query'] = function (block: Blockly.Block) {
+  javascriptGenerator.forBlock['enhanced_sql_query'] = function (block: Blockly.Block, generator: any) {
     const allTables = new Set<string>();
     const selectColumns: string[] = [];
     const groupByColumns: string[] = [];
@@ -176,15 +177,22 @@ export const defineEnhancedBlocks = () => {
     let currentBlock = block.getInputTargetBlock('STATEMENTS');
     while (currentBlock) {
       if (currentBlock.type === 'select_columns') {
-        const result = javascriptGenerator.forBlock['select_columns'](currentBlock);
-        if (typeof result === 'object' && result.tables) {
-          result.tables.forEach((table: string) => allTables.add(table));
-          selectColumns.push(result.columns);
-          selectFound = true;
+        const resultCode = generator.blockToCode(currentBlock);
+        try {
+          const result = JSON.parse(resultCode);
+          if (result.tables) {
+            result.tables.forEach((table: string) => allTables.add(table));
+            selectColumns.push(result.columns);
+            selectFound = true;
+          }
+        } catch (e) {
+          console.log('Error parsing select result:', e);
         }
       } else if (currentBlock.type === 'group_by') {
-        const groupByResult = javascriptGenerator.forBlock['group_by'](currentBlock);
-        groupByColumns.push(groupByResult.replace('GROUP BY ', ''));
+        const groupByResult = generator.blockToCode(currentBlock);
+        if (typeof groupByResult === 'string') {
+          groupByColumns.push(groupByResult.replace('GROUP BY ', ''));
+        }
       }
       currentBlock = currentBlock.getNextBlock();
     }
@@ -224,7 +232,7 @@ export const defineEnhancedBlocks = () => {
     }
 
     // Add WHERE clause if specified
-    const whereCondition = javascriptGenerator.valueToCode(block, 'WHERE', Order.NONE);
+    const whereCondition = generator.valueToCode(block, 'WHERE', Order.NONE);
     if (whereCondition && whereCondition.trim() && whereCondition !== 'null') {
       let conditionStr = whereCondition;
       if ((whereCondition.startsWith("'") && whereCondition.endsWith("'")) || 
