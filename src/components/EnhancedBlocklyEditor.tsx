@@ -18,41 +18,44 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
   const blocklyDiv = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
   const [generatedSql, setGeneratedSql] = useState<string>('');
+  const [previousColumns, setPreviousColumns] = useState<Array<{ id: string; name: string; table: string }>>([]);
 
-  const toolboxXml = `
-    <xml xmlns="https://developers.google.com/blockly/xml">
-      <category name="Query Builder" colour="290">
-        <block type="enhanced_sql_query"></block>
-        <block type="select_columns"></block>
-      </category>
-      <category name="Selected Columns" colour="160">
-        ${selectedColumns.map(col => 
-          `<block type="dynamic_column">
-            <field name="COLUMN_NAME">${col.name}</field>
-          </block>`
-        ).join('')}
-      </category>
-      <category name="Aggregation" colour="230">
-        <block type="count_function"></block>
-        <block type="sum_function"></block>
-        <block type="group_by"></block>
-      </category>
-      <category name="Logic & Text" colour="210">
-        <block type="controls_if"></block>
-        <block type="logic_compare"></block>
-        <block type="logic_operation"></block>
-        <block type="text"></block>
-        <block type="math_number">
-          <field name="NUM">0</field>
-        </block>
-      </category>
-    </xml>
-  `;
+  const generateToolboxXml = (columns: Array<{ id: string; name: string; table: string }>) => {
+    return `
+      <xml xmlns="https://developers.google.com/blockly/xml">
+        <category name="Query Builder" colour="290">
+          <block type="enhanced_sql_query"></block>
+          <block type="select_columns"></block>
+        </category>
+        <category name="Selected Columns" colour="160">
+          ${columns.map(col => 
+            `<block type="dynamic_column">
+              <field name="COLUMN_NAME">${col.name}</field>
+            </block>`
+          ).join('')}
+        </category>
+        <category name="Aggregation" colour="230">
+          <block type="count_function"></block>
+          <block type="sum_function"></block>
+          <block type="group_by"></block>
+        </category>
+        <category name="Logic & Text" colour="210">
+          <block type="controls_if"></block>
+          <block type="logic_compare"></block>
+          <block type="logic_operation"></block>
+          <block type="text"></block>
+          <block type="math_number">
+            <field name="NUM">0</field>
+          </block>
+        </category>
+      </xml>
+    `;
+  };
 
   useEffect(() => {
     if (blocklyDiv.current && !workspaceRef.current) {
       workspaceRef.current = Blockly.inject(blocklyDiv.current, {
-        toolbox: toolboxXml,
+        toolbox: generateToolboxXml(selectedColumns),
         grid: {
           spacing: 20,
           length: 3,
@@ -84,34 +87,57 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
 
       workspaceRef.current.addChangeListener(onWorkspaceChange);
     }
+  }, []);
 
-    // Update toolbox when selected columns change
-    if (workspaceRef.current) {
-      workspaceRef.current.updateToolbox(toolboxXml);
-    }
-  }, [selectedColumns, toolboxXml]);
-
-  // Add selected columns as blocks to the workspace
+  // Handle column changes - add new blocks and remove unchecked ones
   useEffect(() => {
-    if (workspaceRef.current && selectedColumns.length > 0) {
-      selectedColumns.forEach((col, index) => {
-        // Check if block already exists
-        const existingBlocks = workspaceRef.current!.getAllBlocks(false);
-        const blockExists = existingBlocks.some((block: any) => 
-          block.type === 'dynamic_column' && 
-          block.getFieldValue('COLUMN_NAME') === col.name &&
-          block.tableName_ === col.table
-        );
+    if (!workspaceRef.current) return;
 
-        if (!blockExists) {
-          const block = workspaceRef.current!.newBlock('dynamic_column');
-          (block as any).setColumnInfo(col.name, col.table);
-          block.initSvg();
-          block.moveBy(50 + (index * 20), 100 + (index * 80));
-          block.render();
+    const currentColumnIds = new Set(selectedColumns.map(col => col.id));
+    const previousColumnIds = new Set(previousColumns.map(col => col.id));
+
+    // Find newly added columns
+    const addedColumns = selectedColumns.filter(col => !previousColumnIds.has(col.id));
+    
+    // Find removed columns
+    const removedColumnIds = previousColumns.filter(col => !currentColumnIds.has(col.id)).map(col => col.id);
+
+    // Remove blocks for unchecked columns
+    if (removedColumnIds.length > 0) {
+      const allBlocks = workspaceRef.current.getAllBlocks(false);
+      
+      allBlocks.forEach((block: any) => {
+        if (block.type === 'dynamic_column') {
+          const blockColumnName = block.getFieldValue('COLUMN_NAME');
+          const blockTableName = block.tableName_;
+          const blockId = `${blockTableName}.${blockColumnName}`;
+          
+          if (removedColumnIds.includes(blockId)) {
+            block.dispose();
+          }
         }
       });
     }
+
+    // Add blocks for newly checked columns
+    addedColumns.forEach((col, index) => {
+      const block = workspaceRef.current!.newBlock('dynamic_column');
+      (block as any).setColumnInfo(col.name, col.table);
+      block.initSvg();
+      block.moveBy(50 + (index * 20), 100 + (selectedColumns.length * 20));
+      block.render();
+    });
+
+    // Update toolbox with current columns
+    workspaceRef.current.updateToolbox(generateToolboxXml(selectedColumns));
+
+    // Update previous columns for next comparison
+    setPreviousColumns([...selectedColumns]);
+
+    // Regenerate SQL after changes
+    const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
+    setGeneratedSql(code || '-- Build your query using the blocks');
+
   }, [selectedColumns]);
 
   const generateSqlPreview = () => {
