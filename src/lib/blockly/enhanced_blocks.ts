@@ -3,12 +3,14 @@ import * as Blockly from 'blockly/core';
 import { javascriptGenerator, Order } from 'blockly/javascript';
 
 export const defineEnhancedBlocks = () => {
-  // Dynamic column block
+  // Dynamic column block - should be stackable
   Blockly.Blocks['dynamic_column'] = {
     init: function () {
       this.appendDummyInput()
         .appendField(new Blockly.FieldTextInput('column'), 'COLUMN_NAME');
       this.setOutput(true, 'Column');
+      this.setPreviousStatement(true, 'Column');
+      this.setNextStatement(true, 'Column');
       this.setColour(160);
       this.setTooltip('A selected column from the tree view.');
       this.setHelpUrl('');
@@ -30,13 +32,13 @@ export const defineEnhancedBlocks = () => {
     return [JSON.stringify(data), Order.ATOMIC];
   };
 
-  // Column list for SELECT
+  // Column list for SELECT - should accept stackable columns
   Blockly.Blocks['select_columns'] = {
     init: function() {
       this.appendStatementInput('COLUMNS')
         .setCheck('Column')
         .appendField('SELECT');
-      this.setNextStatement(true, 'Statement');
+      this.setOutput(true, 'SelectStatement');
       this.setColour(290);
       this.setTooltip('Select columns for the SQL query.');
       this.setHelpUrl('');
@@ -66,7 +68,7 @@ export const defineEnhancedBlocks = () => {
     return [JSON.stringify(result), Order.ATOMIC];
   };
 
-  // Aggregation blocks
+  // Aggregation blocks - should also be stackable
   Blockly.Blocks['count_function'] = {
     init: function() {
       this.appendValueInput('COLUMN')
@@ -75,6 +77,8 @@ export const defineEnhancedBlocks = () => {
       this.appendDummyInput()
         .appendField(')');
       this.setOutput(true, 'Column');
+      this.setPreviousStatement(true, 'Column');
+      this.setNextStatement(true, 'Column');
       this.setColour(230);
       this.setTooltip('Count function for aggregation.');
       this.setHelpUrl('');
@@ -105,6 +109,8 @@ export const defineEnhancedBlocks = () => {
       this.appendDummyInput()
         .appendField(')');
       this.setOutput(true, 'Column');
+      this.setPreviousStatement(true, 'Column');
+      this.setNextStatement(true, 'Column');
       this.setColour(230);
       this.setTooltip('Sum function for aggregation.');
       this.setHelpUrl('');
@@ -151,12 +157,15 @@ export const defineEnhancedBlocks = () => {
     }
   };
 
-  // Enhanced SQL Query block
+  // Enhanced SQL Query block - should accept SELECT statements
   Blockly.Blocks['enhanced_sql_query'] = {
     init: function() {
+      this.appendValueInput('SELECT')
+        .setCheck('SelectStatement')
+        .appendField('SQL Query - SELECT');
       this.appendStatementInput('STATEMENTS')
         .setCheck('Statement')
-        .appendField('SQL Query');
+        .appendField('Additional clauses:');
       this.appendValueInput('WHERE')
         .setCheck(['Boolean', 'String'])
         .appendField('WHERE (optional)');
@@ -171,24 +180,28 @@ export const defineEnhancedBlocks = () => {
     const allTables = new Set<string>();
     const selectColumns: string[] = [];
     const groupByColumns: string[] = [];
-    let selectFound = false;
 
-    // Process all statement blocks
+    // Process SELECT input
+    const selectCode = generator.valueToCode(block, 'SELECT', Order.NONE);
+    let selectFound = false;
+    
+    if (selectCode) {
+      try {
+        const selectResult = JSON.parse(selectCode);
+        if (selectResult.tables) {
+          selectResult.tables.forEach((table: string) => allTables.add(table));
+          selectColumns.push(selectResult.columns);
+          selectFound = true;
+        }
+      } catch (e) {
+        console.log('Error parsing select result:', e);
+      }
+    }
+
+    // Process additional statement blocks (GROUP BY, etc.)
     let currentBlock = block.getInputTargetBlock('STATEMENTS');
     while (currentBlock) {
-      if (currentBlock.type === 'select_columns') {
-        const resultCode = generator.blockToCode(currentBlock);
-        try {
-          const result = JSON.parse(resultCode);
-          if (result.tables) {
-            result.tables.forEach((table: string) => allTables.add(table));
-            selectColumns.push(result.columns);
-            selectFound = true;
-          }
-        } catch (e) {
-          console.log('Error parsing select result:', e);
-        }
-      } else if (currentBlock.type === 'group_by') {
+      if (currentBlock.type === 'group_by') {
         const groupByResult = generator.blockToCode(currentBlock);
         if (typeof groupByResult === 'string') {
           groupByColumns.push(groupByResult.replace('GROUP BY ', ''));
@@ -198,7 +211,7 @@ export const defineEnhancedBlocks = () => {
     }
 
     if (!selectFound || allTables.size === 0) {
-      return ['-- Please add SELECT columns using the tree view on the left', Order.ATOMIC];
+      return ['-- Please connect a SELECT block with columns from the tree view', Order.ATOMIC];
     }
 
     // Generate FROM clause with auto-joins
