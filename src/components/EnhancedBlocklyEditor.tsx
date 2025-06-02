@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
@@ -25,7 +24,6 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
       <xml xmlns="https://developers.google.com/blockly/xml">
         <category name="Query Builder" colour="290">
           <block type="enhanced_sql_query"></block>
-          <block type="select_columns"></block>
         </category>
         <category name="Selected Columns" colour="160">
           ${columns.map(col => 
