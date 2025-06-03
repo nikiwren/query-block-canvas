@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
@@ -153,34 +154,31 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
   return (
     <div className="h-full flex flex-col">
       <Card className="flex-1 flex flex-col overflow-hidden">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>SQL Query Builder</CardTitle>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button onClick={generateSqlPreview} className="bg-blue-600 hover:bg-blue-700">
+                Preview SQL
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="max-w-3xl">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Generated SQL Query</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <pre className="bg-muted p-4 rounded-md text-sm whitespace-pre-wrap font-mono overflow-auto max-h-96">
+                    {generatedSql}
+                  </pre>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogAction>Close</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardHeader>
         <CardContent className="flex-1 p-0 relative">
           <div ref={blocklyDiv} style={{ height: '100%', width: '100%' }} />
-          
-          <div className="absolute bottom-4 right-4">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button onClick={generateSqlPreview} className="bg-blue-600 hover:bg-blue-700">
-                  Preview SQL
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent className="max-w-3xl">
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Generated SQL Query</AlertDialogTitle>
-                  <AlertDialogDescription asChild>
-                    <pre className="bg-muted p-4 rounded-md text-sm whitespace-pre-wrap font-mono overflow-auto max-h-96">
-                      {generatedSql}
-                    </pre>
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogAction>Close</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
         </CardContent>
       </Card>
     </div>
