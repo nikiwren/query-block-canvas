@@ -28,8 +28,8 @@ export const defineEnhancedBlocks = () => {
   javascriptGenerator.forBlock['dynamic_column'] = function (block: any, generator: any) {
     const columnName = block.getFieldValue('COLUMN_NAME');
     const tableName = block.tableName_ || 'unknown_table';
-    const data = { column: columnName, table: tableName };
-    return [JSON.stringify(data), Order.ATOMIC];
+    // Return the formatted column reference for SQL
+    return [`${tableName}.${columnName}`, Order.ATOMIC];
   };
 
   // Aggregation blocks - should also be stackable
@@ -51,18 +51,7 @@ export const defineEnhancedBlocks = () => {
 
   javascriptGenerator.forBlock['count_function'] = function (block: Blockly.Block, generator: any) {
     const column = generator.valueToCode(block, 'COLUMN', Order.NONE) || '*';
-    let columnInfo;
-    try {
-      columnInfo = JSON.parse(column);
-    } catch (e) {
-      columnInfo = { column: column, table: 'unknown' };
-    }
-    
-    const result = {
-      column: `COUNT(${columnInfo.table}.${columnInfo.column})`,
-      table: columnInfo.table
-    };
-    return [JSON.stringify(result), Order.ATOMIC];
+    return [`COUNT(${column})`, Order.ATOMIC];
   };
 
   Blockly.Blocks['sum_function'] = {
@@ -83,18 +72,7 @@ export const defineEnhancedBlocks = () => {
 
   javascriptGenerator.forBlock['sum_function'] = function (block: Blockly.Block, generator: any) {
     const column = generator.valueToCode(block, 'COLUMN', Order.NONE) || '*';
-    let columnInfo;
-    try {
-      columnInfo = JSON.parse(column);
-    } catch (e) {
-      columnInfo = { column: column, table: 'unknown' };
-    }
-    
-    const result = {
-      column: `SUM(${columnInfo.table}.${columnInfo.column})`,
-      table: columnInfo.table
-    };
-    return [JSON.stringify(result), Order.ATOMIC];
+    return [`SUM(${column})`, Order.ATOMIC];
   };
 
   Blockly.Blocks['group_by'] = {
@@ -112,13 +90,7 @@ export const defineEnhancedBlocks = () => {
 
   javascriptGenerator.forBlock['group_by'] = function (block: Blockly.Block, generator: any) {
     const column = generator.valueToCode(block, 'COLUMN', Order.NONE) || '';
-    let columnInfo;
-    try {
-      columnInfo = JSON.parse(column);
-      return `GROUP BY ${columnInfo.table}.${columnInfo.column}`;
-    } catch (e) {
-      return 'GROUP BY ' + column;
-    }
+    return `GROUP BY ${column}`;
   };
 
   // Enhanced SQL Query block - now accepts multiple column inputs directly
@@ -156,22 +128,15 @@ export const defineEnhancedBlocks = () => {
       } else if (currentBlock.type === 'count_function' || currentBlock.type === 'sum_function') {
         // Handle aggregation functions
         const functionResult = generator.blockToCode(currentBlock);
-        if (typeof functionResult === 'string') {
-          try {
-            const parsedResult = JSON.parse(functionResult);
-            selectColumns.push(parsedResult.column);
-            allTables.add(parsedResult.table);
-          } catch (e) {
-            selectColumns.push(functionResult);
+        if (Array.isArray(functionResult) && functionResult.length > 0) {
+          selectColumns.push(functionResult[0]);
+          // Extract table name from the aggregation function if possible
+          const tableMatch = functionResult[0].match(/\w+\./);
+          if (tableMatch) {
+            allTables.add(tableMatch[0].slice(0, -1));
           }
-        } else if (Array.isArray(functionResult) && functionResult.length > 0) {
-          try {
-            const parsedResult = JSON.parse(functionResult[0]);
-            selectColumns.push(parsedResult.column);
-            allTables.add(parsedResult.table);
-          } catch (e) {
-            selectColumns.push(functionResult[0]);
-          }
+        } else if (typeof functionResult === 'string') {
+          selectColumns.push(functionResult);
         }
       }
       currentBlock = currentBlock.getNextBlock();
@@ -223,14 +188,27 @@ export const defineEnhancedBlocks = () => {
       query += '\n' + joinClauses.join('\n');
     }
 
-    // Add WHERE clause if specified
+    // Add WHERE clause if specified - fix the logic here
     const whereCondition = generator.valueToCode(block, 'WHERE', Order.NONE);
     if (whereCondition && whereCondition.trim() && whereCondition !== 'null') {
+      // Clean up the condition - remove quotes if it's a string literal
       let conditionStr = whereCondition;
       if ((whereCondition.startsWith("'") && whereCondition.endsWith("'")) || 
           (whereCondition.startsWith('"') && whereCondition.endsWith('"'))) {
         conditionStr = whereCondition.substring(1, whereCondition.length - 1);
       }
+      
+      // If it's still a JSON object string, try to parse and format it properly
+      try {
+        if (conditionStr.includes('{"column"')) {
+          // This is likely a malformed condition from comparison blocks
+          // For now, just use it as is but clean it up
+          conditionStr = conditionStr.replace(/\{"column":"([^"]+)","table":"[^"]+"\}/g, '$1');
+        }
+      } catch (e) {
+        // If parsing fails, use the original condition
+      }
+      
       query += `\nWHERE ${conditionStr}`;
     }
 
