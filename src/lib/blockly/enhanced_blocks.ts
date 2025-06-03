@@ -32,6 +32,38 @@ export const defineEnhancedBlocks = () => {
     return [`${tableName}.${columnName}`, Order.ATOMIC];
   };
 
+  // Override the default logic_compare block to handle dynamic columns properly
+  javascriptGenerator.forBlock['logic_compare'] = function (block: Blockly.Block, generator: any) {
+    const OPERATORS = {
+      'EQ': '==',
+      'NEQ': '!=',
+      'LT': '<',
+      'LTE': '<=',
+      'GT': '>',
+      'GTE': '>='
+    };
+    
+    const operator = OPERATORS[block.getFieldValue('OP') as keyof typeof OPERATORS] || '==';
+    const order = operator === '==' || operator === '!=' ? Order.EQUALITY : Order.RELATIONAL;
+    
+    let argument0 = generator.valueToCode(block, 'A', order) || 'null';
+    let argument1 = generator.valueToCode(block, 'B', order) || 'null';
+    
+    // Clean up the arguments if they are from dynamic_column blocks
+    // Remove quotes if they exist and extract table.column format
+    [argument0, argument1].forEach((arg, index) => {
+      const cleanArg = arg.replace(/['"]/g, '');
+      if (index === 0) {
+        argument0 = cleanArg;
+      } else {
+        argument1 = cleanArg;
+      }
+    });
+    
+    const code = `${argument0} ${operator} ${argument1}`;
+    return [code, order];
+  };
+
   // Aggregation blocks - should also be stackable
   Blockly.Blocks['count_function'] = {
     init: function() {
@@ -188,28 +220,10 @@ export const defineEnhancedBlocks = () => {
       query += '\n' + joinClauses.join('\n');
     }
 
-    // Add WHERE clause if specified - fix the logic here
+    // Add WHERE clause if specified - now properly handles table.column format
     const whereCondition = generator.valueToCode(block, 'WHERE', Order.NONE);
     if (whereCondition && whereCondition.trim() && whereCondition !== 'null') {
-      // Clean up the condition - remove quotes if it's a string literal
-      let conditionStr = whereCondition;
-      if ((whereCondition.startsWith("'") && whereCondition.endsWith("'")) || 
-          (whereCondition.startsWith('"') && whereCondition.endsWith('"'))) {
-        conditionStr = whereCondition.substring(1, whereCondition.length - 1);
-      }
-      
-      // If it's still a JSON object string, try to parse and format it properly
-      try {
-        if (conditionStr.includes('{"column"')) {
-          // This is likely a malformed condition from comparison blocks
-          // For now, just use it as is but clean it up
-          conditionStr = conditionStr.replace(/\{"column":"([^"]+)","table":"[^"]+"\}/g, '$1');
-        }
-      } catch (e) {
-        // If parsing fails, use the original condition
-      }
-      
-      query += `\nWHERE ${conditionStr}`;
+      query += `\nWHERE ${whereCondition}`;
     }
 
     // Add GROUP BY if specified
