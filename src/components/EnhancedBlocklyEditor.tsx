@@ -115,6 +115,11 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
           }
         }
       });
+
+      // Refresh the workspace to update scrollbars after block removal
+      workspaceRef.current.cleanUp();
+      workspaceRef.current.resizeContents();
+      workspaceRef.current.render();
     }
 
     // Add blocks for newly checked columns
