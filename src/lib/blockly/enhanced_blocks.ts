@@ -125,7 +125,7 @@ export const defineEnhancedBlocks = () => {
     return `GROUP BY ${column}`;
   };
 
-  // Enhanced SQL Query block - now accepts multiple column inputs directly
+  // Enhanced SQL Query block - now validates table relationships
   Blockly.Blocks['enhanced_sql_query'] = {
     init: function() {
       this.appendStatementInput('SELECT_COLUMNS')
@@ -190,26 +190,50 @@ export const defineEnhancedBlocks = () => {
       return ['-- Please connect column blocks to SELECT', Order.ATOMIC];
     }
 
-    // Generate FROM clause with auto-joins
+    // Check for valid table relationships
     const tables = Array.from(allTables);
+    const validJoinRules = {
+      'rtable1-ttable1': 'rtable1.rcol11 = ttable1.tcol12'
+    };
+
+    // Check if we have more than one table and if they can be joined
+    if (tables.length > 1) {
+      let hasValidJoin = false;
+      
+      // Check if any pair of tables has a valid join rule
+      for (let i = 0; i < tables.length; i++) {
+        for (let j = i + 1; j < tables.length; j++) {
+          const joinKey1 = `${tables[i]}-${tables[j]}`;
+          const joinKey2 = `${tables[j]}-${tables[i]}`;
+          
+          if (validJoinRules[joinKey1 as keyof typeof validJoinRules] || 
+              validJoinRules[joinKey2 as keyof typeof validJoinRules]) {
+            hasValidJoin = true;
+            break;
+          }
+        }
+        if (hasValidJoin) break;
+      }
+
+      // If no valid join exists between the tables, return error
+      if (!hasValidJoin) {
+        return [`-- ERROR: Cannot join tables ${tables.join(', ')}. No valid relationship exists between these tables.\n-- Please select columns from related tables only.`, Order.ATOMIC];
+      }
+    }
+
+    // Generate FROM clause with auto-joins
     let fromClause = tables[0];
     let joinClauses: string[] = [];
 
     // Auto-generate joins based on predefined relationships
-    const joinRules = {
-      'rtable1-ttable1': 'rtable1.rcol11 = ttable1.tcol12'
-    };
-
     for (let i = 1; i < tables.length; i++) {
       const joinKey = `${tables[0]}-${tables[i]}`;
       const reverseJoinKey = `${tables[i]}-${tables[0]}`;
       
-      if (joinRules[joinKey as keyof typeof joinRules]) {
-        joinClauses.push(`INNER JOIN ${tables[i]} ON ${joinRules[joinKey as keyof typeof joinRules]}`);
-      } else if (joinRules[reverseJoinKey as keyof typeof joinRules]) {
-        joinClauses.push(`INNER JOIN ${tables[i]} ON ${joinRules[reverseJoinKey as keyof typeof joinRules]}`);
-      } else {
-        joinClauses.push(`INNER JOIN ${tables[i]} ON ${tables[0]}.id = ${tables[i]}.id`);
+      if (validJoinRules[joinKey as keyof typeof validJoinRules]) {
+        joinClauses.push(`INNER JOIN ${tables[i]} ON ${validJoinRules[joinKey as keyof typeof validJoinRules]}`);
+      } else if (validJoinRules[reverseJoinKey as keyof typeof validJoinRules]) {
+        joinClauses.push(`INNER JOIN ${tables[i]} ON ${validJoinRules[reverseJoinKey as keyof typeof validJoinRules]}`);
       }
     }
 
@@ -220,7 +244,7 @@ export const defineEnhancedBlocks = () => {
       query += '\n' + joinClauses.join('\n');
     }
 
-    // Add WHERE clause if specified - now properly handles table.column format
+    // Add WHERE clause if specified
     const whereCondition = generator.valueToCode(block, 'WHERE', Order.NONE);
     if (whereCondition && whereCondition.trim() && whereCondition !== 'null') {
       query += `\nWHERE ${whereCondition}`;
