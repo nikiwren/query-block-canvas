@@ -7,6 +7,8 @@ import { defineEnhancedBlocks } from '@/lib/blockly/enhanced_blocks';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { X } from 'lucide-react';
 
 defineEnhancedBlocks();
 
@@ -19,6 +21,7 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
   const [generatedSql, setGeneratedSql] = useState<string>('');
   const [previousColumns, setPreviousColumns] = useState<Array<{ id: string; name: string; table: string }>>([]);
+  const [joinError, setJoinError] = useState<{ show: boolean; missingJoins: string[] }>({ show: false, missingJoins: [] });
 
   const generateToolboxXml = (columns: Array<{ id: string; name: string; table: string }>) => {
     return `
@@ -85,6 +88,20 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
       };
 
       workspaceRef.current.addChangeListener(onWorkspaceChange);
+
+      // Listen for join error events
+      const handleJoinError = (event: CustomEvent) => {
+        setJoinError({
+          show: true,
+          missingJoins: event.detail.missingJoins
+        });
+      };
+
+      window.addEventListener('showJoinError', handleJoinError as EventListener);
+
+      return () => {
+        window.removeEventListener('showJoinError', handleJoinError as EventListener);
+      };
     }
   }, []);
 
@@ -151,8 +168,29 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
     }
   };
 
+  const closeJoinError = () => {
+    setJoinError({ show: false, missingJoins: [] });
+  };
+
   return (
     <div className="h-full flex flex-col">
+      {joinError.show && (
+        <Alert variant="destructive" className="mb-4 relative">
+          <AlertTitle>Join Not Defined</AlertTitle>
+          <AlertDescription>
+            Join not defined between tables: {joinError.missingJoins.join(', ')}. Please reach out to dev for support.
+          </AlertDescription>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute top-2 right-2 h-6 w-6 p-0"
+            onClick={closeJoinError}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </Alert>
+      )}
+      
       <Card className="flex-1 flex flex-col overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>SQL Query Builder</CardTitle>

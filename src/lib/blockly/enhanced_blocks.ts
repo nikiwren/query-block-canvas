@@ -125,7 +125,7 @@ export const defineEnhancedBlocks = () => {
     return `GROUP BY ${column}`;
   };
 
-  // Enhanced SQL Query block - now validates table relationships
+  // Enhanced SQL Query block - now validates table relationships with expanded join rules
   Blockly.Blocks['enhanced_sql_query'] = {
     init: function() {
       this.appendStatementInput('SELECT_COLUMNS')
@@ -190,34 +190,44 @@ export const defineEnhancedBlocks = () => {
       return ['-- Please connect column blocks to SELECT', Order.ATOMIC];
     }
 
-    // Check for valid table relationships
+    // Enhanced join rules with all specified relationships
     const tables = Array.from(allTables);
     const validJoinRules = {
-      'rtable1-ttable1': 'rtable1.rcol11 = ttable1.tcol12'
+      'rtable1-ttable1': 'rtable1.rcol11 = ttable1.tcol12',
+      'rtable1-rtable2': 'rtable1.rcol11 = rtable2.rcol21',
+      'rtable1-ttable2': 'rtable1.rcol12 = ttable2.tcol22',
+      'rtable2-ttable1': 'rtable2.rcol22 = ttable1.tcol12',
+      'rtable2-ttable2': 'rtable2.rcol21 = ttable2.tcol21'
     };
 
-    // Check if we have more than one table and if they can be joined
+    // Check if we have more than one table and validate all relationships
     if (tables.length > 1) {
-      let hasValidJoin = false;
+      const missingJoins: string[] = [];
       
-      // Check if any pair of tables has a valid join rule
+      // Check if all pairs of tables have valid join rules
       for (let i = 0; i < tables.length; i++) {
         for (let j = i + 1; j < tables.length; j++) {
           const joinKey1 = `${tables[i]}-${tables[j]}`;
           const joinKey2 = `${tables[j]}-${tables[i]}`;
           
-          if (validJoinRules[joinKey1 as keyof typeof validJoinRules] || 
-              validJoinRules[joinKey2 as keyof typeof validJoinRules]) {
-            hasValidJoin = true;
-            break;
+          if (!validJoinRules[joinKey1 as keyof typeof validJoinRules] && 
+              !validJoinRules[joinKey2 as keyof typeof validJoinRules]) {
+            missingJoins.push(`${tables[i]} and ${tables[j]}`);
           }
         }
-        if (hasValidJoin) break;
       }
 
-      // If no valid join exists between the tables, return error
-      if (!hasValidJoin) {
-        return [`-- ERROR: Cannot join tables ${tables.join(', ')}. No valid relationship exists between these tables.\n-- Please select columns from related tables only.`, Order.ATOMIC];
+      // If any joins are missing, trigger an error alert
+      if (missingJoins.length > 0) {
+        // Trigger a custom event to show the alert dialog
+        setTimeout(() => {
+          const event = new CustomEvent('showJoinError', {
+            detail: { missingJoins: missingJoins }
+          });
+          window.dispatchEvent(event);
+        }, 100);
+        
+        return [`-- ERROR: Join not defined between tables: ${missingJoins.join(', ')}. Please reach out to dev for support.`, Order.ATOMIC];
       }
     }
 
