@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
@@ -33,6 +32,7 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
           ${columns.map(col => 
             `<block type="dynamic_column">
               <field name="COLUMN_NAME">${col.name}</field>
+              <field name="TABLE_NAME">${col.table}</field>
             </block>`
           ).join('')}
         </category>

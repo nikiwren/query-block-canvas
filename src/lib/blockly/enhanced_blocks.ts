@@ -8,6 +8,8 @@ export const defineEnhancedBlocks = () => {
     init: function () {
       this.appendDummyInput()
         .appendField(new Blockly.FieldTextInput('column'), 'COLUMN_NAME');
+      this.appendDummyInput()
+        .appendField(new Blockly.FieldTextInput('table'), 'TABLE_NAME');
       this.setOutput(true, 'Column');
       this.setPreviousStatement(true, 'Column');
       this.setNextStatement(true, 'Column');
@@ -16,10 +18,24 @@ export const defineEnhancedBlocks = () => {
       this.setHelpUrl('');
       this.setMovable(true);
       this.setDeletable(true);
+      
+      // Override the default onchange to set table info when fields change
+      this.setOnChange(function(changeEvent: any) {
+        if (changeEvent.type === Blockly.Events.BLOCK_FIELD_INTERMEDIATE_CHANGE || 
+            changeEvent.type === Blockly.Events.BLOCK_CHANGE) {
+          const tableName = this.getFieldValue('TABLE_NAME');
+          const columnName = this.getFieldValue('COLUMN_NAME');
+          if (tableName && columnName) {
+            this.tableName_ = tableName;
+            this.columnName_ = columnName;
+          }
+        }
+      });
     },
     
     setColumnInfo: function(columnName: string, tableName: string) {
       this.setFieldValue(columnName, 'COLUMN_NAME');
+      this.setFieldValue(tableName, 'TABLE_NAME');
       this.tableName_ = tableName;
       this.columnName_ = columnName;
     }
@@ -27,7 +43,7 @@ export const defineEnhancedBlocks = () => {
 
   javascriptGenerator.forBlock['dynamic_column'] = function (block: any, generator: any) {
     const columnName = block.getFieldValue('COLUMN_NAME');
-    const tableName = block.tableName_ || 'unknown_table';
+    const tableName = block.getFieldValue('TABLE_NAME') || block.tableName_ || 'unknown_table';
     // Return the formatted column reference for SQL
     return [`${tableName}.${columnName}`, Order.ATOMIC];
   };
