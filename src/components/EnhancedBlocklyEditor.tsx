@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
@@ -54,6 +55,24 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
     `;
   };
 
+  const addPersistentQueryBlock = () => {
+    if (!workspaceRef.current) return;
+
+    // Check if a query block already exists
+    const existingBlocks = workspaceRef.current.getBlocksByType('enhanced_sql_query', false);
+    if (existingBlocks.length > 0) return;
+
+    // Create and position the SQL query block
+    const queryBlock = workspaceRef.current.newBlock('enhanced_sql_query');
+    queryBlock.initSvg();
+    queryBlock.moveBy(50, 50); // Position it at a fixed location
+    queryBlock.render();
+    
+    // Make the block less likely to be accidentally deleted by making it prominent
+    queryBlock.setMovable(true);
+    queryBlock.setDeletable(true);
+  };
+
   useEffect(() => {
     if (blocklyDiv.current && !workspaceRef.current) {
       workspaceRef.current = Blockly.inject(blocklyDiv.current, {
@@ -79,6 +98,9 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
           scaleSpeed: 1.2,
         },
       });
+
+      // Add the persistent query block immediately after workspace initialization
+      addPersistentQueryBlock();
 
       const onWorkspaceChange = () => {
         if (workspaceRef.current) {
@@ -118,14 +140,14 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
     // Find removed columns
     const removedColumnIds = previousColumns.filter(col => !currentColumnIds.has(col.id)).map(col => col.id);
 
-    // Remove blocks for unchecked columns
+    // Remove blocks for unchecked columns (but preserve the query builder block)
     if (removedColumnIds.length > 0) {
       const allBlocks = workspaceRef.current.getAllBlocks(false);
       
       allBlocks.forEach((block: any) => {
         if (block.type === 'dynamic_column') {
           const blockColumnName = block.getFieldValue('COLUMN_NAME');
-          const blockTableName = block.tableName_;
+          const blockTableName = block.getFieldValue('TABLE_NAME') || block.tableName_;
           const blockId = `${blockTableName}.${blockColumnName}`;
           
           if (removedColumnIds.includes(blockId)) {
@@ -145,9 +167,12 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
       const block = workspaceRef.current!.newBlock('dynamic_column');
       (block as any).setColumnInfo(col.name, col.table);
       block.initSvg();
-      block.moveBy(50 + (index * 20), 100 + (selectedColumns.length * 20));
+      block.moveBy(50 + (index * 20), 150 + (selectedColumns.length * 20)); // Position below the query block
       block.render();
     });
+
+    // Ensure the query builder block is always present
+    addPersistentQueryBlock();
 
     // Update toolbox with current columns
     workspaceRef.current.updateToolbox(generateToolboxXml(selectedColumns));
