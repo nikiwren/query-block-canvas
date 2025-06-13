@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
@@ -178,12 +177,12 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
           block.render();
           
           // Connect the new block to the SELECT input of the query builder
-          if (selectInput) {
+          if (selectInput && selectInput.connection) {
             // If there's already a connection, find the end of the chain
             let targetConnection = selectInput.connection;
-            if (targetConnection && targetConnection.targetConnection) {
-              // Find the last block in the chain
-              let currentBlock = targetConnection.targetConnection.sourceBlock_;
+            if (targetConnection.targetConnection) {
+              // Find the last block in the chain using public API
+              let currentBlock = targetConnection.targetConnection.getSourceBlock();
               while (currentBlock && currentBlock.getNextBlock()) {
                 currentBlock = currentBlock.getNextBlock();
               }
