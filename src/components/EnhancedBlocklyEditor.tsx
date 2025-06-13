@@ -162,14 +162,54 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
       workspaceRef.current.render();
     }
 
-    // Add blocks for newly checked columns
-    addedColumns.forEach((col, index) => {
-      const block = workspaceRef.current!.newBlock('dynamic_column');
-      (block as any).setColumnInfo(col.name, col.table);
-      block.initSvg();
-      block.moveBy(50 + (index * 20), 150 + (selectedColumns.length * 20)); // Position below the query block
-      block.render();
-    });
+    // Add blocks for newly checked columns and attach them to the query builder
+    if (addedColumns.length > 0) {
+      // Find the SQL query builder block
+      const queryBlocks = workspaceRef.current.getBlocksByType('enhanced_sql_query', false);
+      
+      if (queryBlocks.length > 0) {
+        const queryBlock = queryBlocks[0];
+        const selectInput = queryBlock.getInput('SELECT_COLUMNS');
+        
+        addedColumns.forEach((col) => {
+          const block = workspaceRef.current!.newBlock('dynamic_column');
+          (block as any).setColumnInfo(col.name, col.table);
+          block.initSvg();
+          block.render();
+          
+          // Connect the new block to the SELECT input of the query builder
+          if (selectInput) {
+            // If there's already a connection, find the end of the chain
+            let targetConnection = selectInput.connection;
+            if (targetConnection && targetConnection.targetConnection) {
+              // Find the last block in the chain
+              let currentBlock = targetConnection.targetConnection.sourceBlock_;
+              while (currentBlock && currentBlock.getNextBlock()) {
+                currentBlock = currentBlock.getNextBlock();
+              }
+              // Connect to the next statement of the last block
+              if (currentBlock && currentBlock.nextConnection && !currentBlock.nextConnection.targetConnection) {
+                targetConnection = currentBlock.nextConnection;
+              }
+            }
+            
+            // Connect the new block
+            if (targetConnection && block.previousConnection) {
+              targetConnection.connect(block.previousConnection);
+            }
+          }
+        });
+      } else {
+        // Fallback: if no query block exists, create blocks normally
+        addedColumns.forEach((col, index) => {
+          const block = workspaceRef.current!.newBlock('dynamic_column');
+          (block as any).setColumnInfo(col.name, col.table);
+          block.initSvg();
+          block.moveBy(50 + (index * 20), 150 + (selectedColumns.length * 20));
+          block.render();
+        });
+      }
+    }
 
     // Ensure the query builder block is always present
     addPersistentQueryBlock();
