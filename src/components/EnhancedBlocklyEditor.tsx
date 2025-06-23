@@ -8,19 +8,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { X } from 'lucide-react';
+import QueryResultsView from './QueryResultsView';
 
 defineEnhancedBlocks();
 
 interface EnhancedBlocklyEditorProps {
   selectedColumns: Array<{ id: string; name: string; table: string }>;
+  onQuerySaved?: () => void;
 }
 
-const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedColumns }) => {
+type ViewMode = 'editor' | 'results';
+
+const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedColumns, onQuerySaved }) => {
   const blocklyDiv = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
   const [generatedSql, setGeneratedSql] = useState<string>('');
   const [previousColumns, setPreviousColumns] = useState<Array<{ id: string; name: string; table: string }>>([]);
   const [joinError, setJoinError] = useState<{ show: boolean; missingJoins: string[] }>({ show: false, missingJoins: [] });
+  const [viewMode, setViewMode] = useState<ViewMode>('editor');
 
   const generateToolboxXml = (columns: Array<{ id: string; name: string; table: string }>) => {
     return `
@@ -232,9 +237,64 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
     }
   };
 
+  const handlePreviewData = () => {
+    if (workspaceRef.current) {
+      const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
+      setGeneratedSql(code || '-- Build your query using the blocks');
+      setViewMode('results');
+    }
+  };
+
+  const handleSaveQuery = async () => {
+    try {
+      // Mock save operation - replace with actual database call
+      console.log('Saving query:', generatedSql);
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Reset to initial state with just the query builder block
+      if (workspaceRef.current) {
+        workspaceRef.current.clear();
+        addPersistentQueryBlock();
+      }
+      
+      setViewMode('editor');
+      
+      // Notify parent component if callback provided
+      if (onQuerySaved) {
+        onQuerySaved();
+      }
+      
+      console.log('Query saved successfully');
+    } catch (error) {
+      console.error('Failed to save query:', error);
+    }
+  };
+
+  const handleExit = () => {
+    // Reset to initial state with just the query builder block
+    if (workspaceRef.current) {
+      workspaceRef.current.clear();
+      addPersistentQueryBlock();
+    }
+    
+    setViewMode('editor');
+  };
+
   const closeJoinError = () => {
     setJoinError({ show: false, missingJoins: [] });
   };
+
+  if (viewMode === 'results') {
+    return (
+      <QueryResultsView 
+        sqlQuery={generatedSql}
+        onSaveQuery={handleSaveQuery}
+        onExit={handleExit}
+      />
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -258,26 +318,36 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
       <Card className="flex-1 flex flex-col overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>SQL Query Builder</CardTitle>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button onClick={generateSqlPreview} className="bg-blue-600 hover:bg-blue-700">
-                Preview SQL
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="max-w-3xl">
-              <AlertDialogHeader>
-                <AlertDialogTitle>Generated SQL Query</AlertDialogTitle>
-                <AlertDialogDescription asChild>
-                  <pre className="bg-muted p-4 rounded-md text-sm whitespace-pre-wrap font-mono overflow-auto max-h-96">
-                    {generatedSql}
-                  </pre>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogAction>Close</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <div className="flex space-x-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button onClick={generateSqlPreview} variant="outline">
+                  Preview SQL
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="max-w-3xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Generated SQL Query</AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <pre className="bg-muted p-4 rounded-md text-sm whitespace-pre-wrap font-mono overflow-auto max-h-96">
+                      {generatedSql}
+                    </pre>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogAction>Close</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            
+            <Button onClick={handlePreviewData} className="bg-blue-600 hover:bg-blue-700">
+              Preview Data
+            </Button>
+            
+            <Button onClick={handleSaveQuery} variant="default">
+              Save Query
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="flex-1 p-0 relative">
           <div ref={blocklyDiv} style={{ height: '100%', width: '100%' }} />
