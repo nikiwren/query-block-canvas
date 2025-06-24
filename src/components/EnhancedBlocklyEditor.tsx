@@ -25,6 +25,7 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
   const [generatedSql, setGeneratedSql] = useState<string>('');
   const [previousColumns, setPreviousColumns] = useState<Array<{ id: string; name: string; table: string }>>([]);
   const [joinError, setJoinError] = useState<{ show: boolean; missingJoins: string[] }>({ show: false, missingJoins: [] });
+  const [validationError, setValidationError] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
   const [viewMode, setViewMode] = useState<ViewMode>('editor');
 
   const generateToolboxXml = (columns: Array<{ id: string; name: string; table: string }>) => {
@@ -75,6 +76,28 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
     // Make the block less likely to be accidentally deleted by making it prominent
     queryBlock.setMovable(true);
     queryBlock.setDeletable(true);
+  };
+
+  const validateSqlQuery = (sql: string): { isValid: boolean; message: string } => {
+    // Remove comments and trim whitespace
+    const cleanSql = sql.replace(/--.*$/gm, '').trim();
+    
+    // Check if SQL is empty or just the default comment
+    if (!cleanSql || cleanSql === '-- Build your query using the blocks') {
+      return { isValid: false, message: 'Please build a query using the blocks before previewing data.' };
+    }
+
+    // Check if SQL contains basic SELECT structure
+    if (!cleanSql.toLowerCase().includes('select')) {
+      return { isValid: false, message: 'Invalid SQL query. Please ensure your query contains a SELECT statement.' };
+    }
+
+    // Check for incomplete query (ends with FROM but no table)
+    if (cleanSql.toLowerCase().includes('from') && cleanSql.trim().toLowerCase().endsWith('from')) {
+      return { isValid: false, message: 'Incomplete query. Please specify tables and complete your query.' };
+    }
+
+    return { isValid: true, message: '' };
   };
 
   useEffect(() => {
@@ -240,7 +263,17 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
   const handlePreviewData = () => {
     if (workspaceRef.current) {
       const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
-      setGeneratedSql(code || '-- Build your query using the blocks');
+      const sqlToValidate = code || '-- Build your query using the blocks';
+      
+      // Validate the SQL query
+      const validation = validateSqlQuery(sqlToValidate);
+      
+      if (!validation.isValid) {
+        setValidationError({ show: true, message: validation.message });
+        return;
+      }
+      
+      setGeneratedSql(sqlToValidate);
       setViewMode('results');
     }
   };
@@ -257,6 +290,9 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
       if (workspaceRef.current) {
         workspaceRef.current.clear();
         addPersistentQueryBlock();
+        // Regenerate SQL after clearing
+        const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
+        setGeneratedSql(code || '-- Build your query using the blocks');
       }
       
       setViewMode('editor');
@@ -277,6 +313,9 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
     if (workspaceRef.current) {
       workspaceRef.current.clear();
       addPersistentQueryBlock();
+      // Regenerate SQL after clearing to ensure canvas displays properly
+      const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
+      setGeneratedSql(code || '-- Build your query using the blocks');
     }
     
     setViewMode('editor');
@@ -284,6 +323,10 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
 
   const closeJoinError = () => {
     setJoinError({ show: false, missingJoins: [] });
+  };
+
+  const closeValidationError = () => {
+    setValidationError({ show: false, message: '' });
   };
 
   if (viewMode === 'results') {
@@ -309,6 +352,23 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
             size="sm"
             className="absolute top-2 right-2 h-6 w-6 p-0"
             onClick={closeJoinError}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </Alert>
+      )}
+
+      {validationError.show && (
+        <Alert variant="destructive" className="mb-4 relative">
+          <AlertTitle>Invalid Query</AlertTitle>
+          <AlertDescription>
+            {validationError.message}
+          </AlertDescription>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute top-2 right-2 h-6 w-6 p-0"
+            onClick={closeValidationError}
           >
             <X className="h-4 w-4" />
           </Button>
