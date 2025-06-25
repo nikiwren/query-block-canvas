@@ -43,6 +43,7 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
   const [validationError, setValidationError] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
   const [viewMode, setViewMode] = useState<ViewMode>('editor');
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
+  const [isWorkspaceReady, setIsWorkspaceReady] = useState(false);
 
   const generateToolboxXml = (columns: Array<{ id: string; name: string; table: string }>) => {
     return `
@@ -117,18 +118,25 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
   };
 
   const loadQueryIntoWorkspace = (query: SavedQuery) => {
-    if (!workspaceRef.current) return;
+    console.log('Loading query into workspace:', query);
+    if (!workspaceRef.current || !isWorkspaceReady) {
+      console.log('Workspace not ready, skipping load');
+      return;
+    }
 
     try {
       // Clear existing workspace
       workspaceRef.current.clear();
+      console.log('Workspace cleared');
 
       if (query.blockData) {
         // Load from serialized block data if available
         const xml = Blockly.utils.xml.textToDom(query.blockData);
         Blockly.Xml.domToWorkspace(xml, workspaceRef.current);
+        console.log('Loaded from block data');
       } else {
         // Recreate blocks from SQL structure (fallback method)
+        console.log('Recreating blocks from query structure');
         recreateBlocksFromQuery(query);
       }
 
@@ -138,6 +146,7 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
       
       // Force render the workspace to ensure blocks are visible
       workspaceRef.current.render();
+      console.log('Workspace rendered, SQL generated:', code);
     } catch (error) {
       console.error('Error loading query into workspace:', error);
       // Fallback to recreating from scratch
@@ -146,6 +155,7 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
   };
 
   const recreateBlocksFromQuery = (query: SavedQuery) => {
+    console.log('Recreating blocks from query:', query);
     if (!workspaceRef.current) return;
 
     // Clear workspace first
@@ -156,9 +166,11 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
     queryBlock.initSvg();
     queryBlock.moveBy(50, 50);
     queryBlock.render();
+    console.log('Query block created and rendered');
 
     // Add column blocks for each column in the saved query
     query.columns.forEach((col, index) => {
+      console.log(`Creating column block ${index + 1}:`, col);
       const columnBlock = workspaceRef.current!.newBlock('dynamic_column');
       (columnBlock as any).setColumnInfo(col.name, col.table);
       columnBlock.initSvg();
@@ -185,6 +197,7 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
         // Connect the new block
         if (targetConnection && columnBlock.previousConnection && !targetConnection.targetConnection) {
           targetConnection.connect(columnBlock.previousConnection);
+          console.log(`Connected column block ${index + 1}`);
         }
       }
     });
@@ -193,6 +206,7 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
     const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
     setGeneratedSql(code || query.sql);
     workspaceRef.current.render();
+    console.log('All blocks created and connected, final render complete');
   };
 
   const getMockSavedQueries = (): SavedQuery[] => {
@@ -218,14 +232,19 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
     ];
   };
 
+  // Handle loaded query when workspace is ready
   useEffect(() => {
-    if (loadedQuery && workspaceRef.current) {
+    console.log('loadedQuery useEffect triggered:', { loadedQuery, isWorkspaceReady });
+    if (loadedQuery && isWorkspaceReady && workspaceRef.current) {
+      console.log('Calling loadQueryIntoWorkspace');
       loadQueryIntoWorkspace(loadedQuery);
     }
-  }, [loadedQuery]);
+  }, [loadedQuery, isWorkspaceReady]);
 
   useEffect(() => {
+    console.log('Workspace initialization useEffect');
     if (blocklyDiv.current && !workspaceRef.current) {
+      console.log('Initializing Blockly workspace');
       workspaceRef.current = Blockly.inject(blocklyDiv.current, {
         toolbox: generateToolboxXml(selectedColumns),
         grid: {
@@ -252,6 +271,10 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
 
       // Add the persistent query block immediately after workspace initialization
       addPersistentQueryBlock();
+      
+      // Mark workspace as ready
+      setIsWorkspaceReady(true);
+      console.log('Workspace initialized and ready');
 
       const onWorkspaceChange = () => {
         if (workspaceRef.current) {
