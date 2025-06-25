@@ -11,8 +11,17 @@ interface SelectedColumn {
   table: string;
 }
 
+interface SavedQuery {
+  id: string;
+  name: string;
+  sql: string;
+  columns: SelectedColumn[];
+  blockData?: string; // Serialized Blockly workspace data
+}
+
 const Index = () => {
   const [selectedColumns, setSelectedColumns] = useState<SelectedColumn[]>([]);
+  const [loadedQuery, setLoadedQuery] = useState<SavedQuery | null>(null);
 
   const handleColumnSelect = (columnId: string, columnName: string, tableName: string, checked: boolean) => {
     if (checked) {
@@ -20,6 +29,17 @@ const Index = () => {
     } else {
       setSelectedColumns(prev => prev.filter(col => col.id !== columnId));
     }
+  };
+
+  const handleQueryLoad = (query: SavedQuery) => {
+    // Auto-select columns from the loaded query
+    setSelectedColumns(query.columns);
+    setLoadedQuery(query);
+  };
+
+  const handleQuerySaved = () => {
+    // Clear loaded query state after saving
+    setLoadedQuery(null);
   };
 
   return (
@@ -32,7 +52,10 @@ const Index = () => {
                 <CardTitle>Database Schema</CardTitle>
               </CardHeader>
               <CardContent className="p-0 h-[calc(100%-4rem)]">
-                <ColumnTreeView onColumnSelect={handleColumnSelect} />
+                <ColumnTreeView 
+                  onColumnSelect={handleColumnSelect}
+                  selectedColumns={selectedColumns}
+                />
               </CardContent>
             </Card>
           </ResizablePanel>
@@ -41,7 +64,12 @@ const Index = () => {
           
           <ResizablePanel defaultSize={70}>
             <div className="h-full p-4">
-              <EnhancedBlocklyEditor selectedColumns={selectedColumns} />
+              <EnhancedBlocklyEditor 
+                selectedColumns={selectedColumns} 
+                onQuerySaved={handleQuerySaved}
+                loadedQuery={loadedQuery}
+                onQueryLoad={handleQueryLoad}
+              />
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>

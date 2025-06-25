@@ -12,14 +12,29 @@ import QueryResultsView from './QueryResultsView';
 
 defineEnhancedBlocks();
 
+interface SavedQuery {
+  id: string;
+  name: string;
+  sql: string;
+  columns: Array<{ id: string; name: string; table: string }>;
+  blockData?: string;
+}
+
 interface EnhancedBlocklyEditorProps {
   selectedColumns: Array<{ id: string; name: string; table: string }>;
   onQuerySaved?: () => void;
+  loadedQuery?: SavedQuery | null;
+  onQueryLoad?: (query: SavedQuery) => void;
 }
 
-type ViewMode = 'editor' | 'results';
+type ViewMode = 'editor' | 'results' | 'load';
 
-const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedColumns, onQuerySaved }) => {
+const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ 
+  selectedColumns, 
+  onQuerySaved, 
+  loadedQuery,
+  onQueryLoad 
+}) => {
   const blocklyDiv = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
   const [generatedSql, setGeneratedSql] = useState<string>('');
@@ -27,6 +42,7 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
   const [joinError, setJoinError] = useState<{ show: boolean; missingJoins: string[] }>({ show: false, missingJoins: [] });
   const [validationError, setValidationError] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
   const [viewMode, setViewMode] = useState<ViewMode>('editor');
+  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
 
   const generateToolboxXml = (columns: Array<{ id: string; name: string; table: string }>) => {
     return `
@@ -98,6 +114,97 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
     }
 
     return { isValid: true, message: '' };
+  };
+
+  const loadQueryIntoWorkspace = (query: SavedQuery) => {
+    if (!workspaceRef.current) return;
+
+    try {
+      // Clear existing workspace
+      workspaceRef.current.clear();
+
+      if (query.blockData) {
+        // Load from serialized block data if available
+        const xml = Blockly.utils.xml.textToDom(query.blockData);
+        Blockly.Xml.domToWorkspace(xml, workspaceRef.current);
+      } else {
+        // Recreate blocks from SQL structure (fallback method)
+        recreateBlocksFromQuery(query);
+      }
+
+      // Update generated SQL
+      const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
+      setGeneratedSql(code || query.sql);
+    } catch (error) {
+      console.error('Error loading query into workspace:', error);
+      // Fallback to recreating from scratch
+      recreateBlocksFromQuery(query);
+    }
+  };
+
+  const recreateBlocksFromQuery = (query: SavedQuery) => {
+    if (!workspaceRef.current) return;
+
+    // Add the persistent query block
+    addPersistentQueryBlock();
+
+    // Find the SQL query builder block
+    const queryBlocks = workspaceRef.current.getBlocksByType('enhanced_sql_query', false);
+    
+    if (queryBlocks.length > 0) {
+      const queryBlock = queryBlocks[0];
+      const selectInput = queryBlock.getInput('SELECT_COLUMNS');
+      
+      // Add column blocks for each column in the saved query
+      query.columns.forEach((col, index) => {
+        const block = workspaceRef.current!.newBlock('dynamic_column');
+        (block as any).setColumnInfo(col.name, col.table);
+        block.initSvg();
+        block.render();
+        
+        // Connect the new block to the SELECT input
+        if (selectInput && selectInput.connection) {
+          let targetConnection = selectInput.connection;
+          if (targetConnection.targetConnection) {
+            // Find the last block in the chain
+            let currentBlock = targetConnection.targetConnection.getSourceBlock();
+            while (currentBlock && currentBlock.getNextBlock()) {
+              currentBlock = currentBlock.getNextBlock();
+            }
+            if (currentBlock && currentBlock.nextConnection && !currentBlock.nextConnection.targetConnection) {
+              targetConnection = currentBlock.nextConnection;
+            }
+          }
+          
+          if (targetConnection && block.previousConnection) {
+            targetConnection.connect(block.previousConnection);
+          }
+        }
+      });
+    }
+  };
+
+  const getMockSavedQueries = (): SavedQuery[] => {
+    return [
+      {
+        id: '1',
+        name: 'User Activity Report',
+        sql: 'SELECT rtable1.rcol11, rtable1.rcol12\nFROM rtable1',
+        columns: [
+          { id: 'rtable1.rcol11', name: 'rcol11', table: 'rtable1' },
+          { id: 'rtable1.rcol12', name: 'rcol12', table: 'rtable1' }
+        ]
+      },
+      {
+        id: '2',
+        name: 'Cross Table Analysis',
+        sql: 'SELECT rtable1.rcol11, ttable1.tcol11\nFROM rtable1\nINNER JOIN ttable1 ON rtable1.rcol11 = ttable1.tcol12',
+        columns: [
+          { id: 'rtable1.rcol11', name: 'rcol11', table: 'rtable1' },
+          { id: 'ttable1.tcol11', name: 'tcol11', table: 'ttable1' }
+        ]
+      }
+    ];
   };
 
   useEffect(() => {
@@ -280,8 +387,23 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
 
   const handleSaveQuery = async () => {
     try {
+      // Serialize the current workspace
+      let blockData = '';
+      if (workspaceRef.current) {
+        const xml = Blockly.Xml.workspaceToDom(workspaceRef.current);
+        blockData = Blockly.utils.xml.domToText(xml);
+      }
+
+      const queryToSave: SavedQuery = {
+        id: Date.now().toString(),
+        name: `Query ${Date.now()}`,
+        sql: generatedSql,
+        columns: selectedColumns,
+        blockData
+      };
+
       // Mock save operation - replace with actual database call
-      console.log('Saving query:', generatedSql);
+      console.log('Saving query:', queryToSave);
       
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -308,6 +430,18 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
     }
   };
 
+  const handleLoadQuery = () => {
+    setSavedQueries(getMockSavedQueries());
+    setViewMode('load');
+  };
+
+  const handleSelectQuery = (query: SavedQuery) => {
+    if (onQueryLoad) {
+      onQueryLoad(query);
+    }
+    setViewMode('editor');
+  };
+
   const handleExit = () => {
     // Reset to initial state with just the query builder block
     if (workspaceRef.current) {
@@ -328,6 +462,50 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
   const closeValidationError = () => {
     setValidationError({ show: false, message: '' });
   };
+
+  if (viewMode === 'load') {
+    return (
+      <div className="h-full p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">Load Saved Query</h2>
+          <Button onClick={() => setViewMode('editor')} variant="outline">
+            Cancel
+          </Button>
+        </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Saved Queries</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {savedQueries.map((query) => (
+                <div key={query.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h3 className="font-semibold">{query.name}</h3>
+                      <pre className="text-sm text-gray-600 mt-2 whitespace-pre-wrap font-mono">
+                        {query.sql}
+                      </pre>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Columns: {query.columns.map(col => `${col.table}.${col.name}`).join(', ')}
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={() => handleSelectQuery(query)}
+                      size="sm"
+                    >
+                      Load Query
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (viewMode === 'results') {
     return (
@@ -379,6 +557,10 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({ selectedC
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>SQL Query Builder</CardTitle>
           <div className="flex space-x-2">
+            <Button onClick={handleLoadQuery} variant="secondary">
+              Load Query
+            </Button>
+            
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button onClick={generateSqlPreview} variant="outline">
