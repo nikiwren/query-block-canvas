@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Search } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -14,14 +13,27 @@ interface ColumnNode {
   checked?: boolean;
 }
 
-interface ColumnTreeViewProps {
-  onColumnSelect: (columnId: string, columnName: string, tableName: string, checked: boolean) => void;
+interface SelectedColumn {
+  id: string;
+  name: string;
+  table: string;
 }
 
-const ColumnTreeView: React.FC<ColumnTreeViewProps> = ({ onColumnSelect }) => {
+interface ColumnTreeViewProps {
+  onColumnSelect: (columnId: string, columnName: string, tableName: string, checked: boolean) => void;
+  selectedColumns: SelectedColumn[];
+}
+
+const ColumnTreeView: React.FC<ColumnTreeViewProps> = ({ onColumnSelect, selectedColumns }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['risk', 'trade']));
   const [checkedColumns, setCheckedColumns] = useState<Set<string>>(new Set());
+
+  // Update checked columns when selectedColumns prop changes
+  useEffect(() => {
+    const newCheckedColumns = new Set(selectedColumns.map(col => col.id));
+    setCheckedColumns(newCheckedColumns);
+  }, [selectedColumns]);
 
   const treeData: ColumnNode[] = [
     {
