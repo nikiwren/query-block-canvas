@@ -132,9 +132,12 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
         recreateBlocksFromQuery(query);
       }
 
-      // Update generated SQL
+      // Update generated SQL and render workspace
       const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
       setGeneratedSql(code || query.sql);
+      
+      // Force render the workspace to ensure blocks are visible
+      workspaceRef.current.render();
     } catch (error) {
       console.error('Error loading query into workspace:', error);
       // Fallback to recreating from scratch
@@ -145,43 +148,51 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
   const recreateBlocksFromQuery = (query: SavedQuery) => {
     if (!workspaceRef.current) return;
 
-    // Add the persistent query block
-    addPersistentQueryBlock();
+    // Clear workspace first
+    workspaceRef.current.clear();
 
-    // Find the SQL query builder block
-    const queryBlocks = workspaceRef.current.getBlocksByType('enhanced_sql_query', false);
-    
-    if (queryBlocks.length > 0) {
-      const queryBlock = queryBlocks[0];
-      const selectInput = queryBlock.getInput('SELECT_COLUMNS');
+    // Add the persistent query block
+    const queryBlock = workspaceRef.current.newBlock('enhanced_sql_query');
+    queryBlock.initSvg();
+    queryBlock.moveBy(50, 50);
+    queryBlock.render();
+
+    // Add column blocks for each column in the saved query
+    query.columns.forEach((col, index) => {
+      const columnBlock = workspaceRef.current!.newBlock('dynamic_column');
+      (columnBlock as any).setColumnInfo(col.name, col.table);
+      columnBlock.initSvg();
+      columnBlock.moveBy(50, 150 + (index * 40)); // Position blocks vertically
+      columnBlock.render();
       
-      // Add column blocks for each column in the saved query
-      query.columns.forEach((col, index) => {
-        const block = workspaceRef.current!.newBlock('dynamic_column');
-        (block as any).setColumnInfo(col.name, col.table);
-        block.initSvg();
-        block.render();
+      // Connect the column block to the SELECT input of the query block
+      const selectInput = queryBlock.getInput('SELECT_COLUMNS');
+      if (selectInput && selectInput.connection) {
+        let targetConnection = selectInput.connection;
         
-        // Connect the new block to the SELECT input
-        if (selectInput && selectInput.connection) {
-          let targetConnection = selectInput.connection;
-          if (targetConnection.targetConnection) {
-            // Find the last block in the chain
-            let currentBlock = targetConnection.targetConnection.getSourceBlock();
-            while (currentBlock && currentBlock.getNextBlock()) {
-              currentBlock = currentBlock.getNextBlock();
-            }
-            if (currentBlock && currentBlock.nextConnection && !currentBlock.nextConnection.targetConnection) {
-              targetConnection = currentBlock.nextConnection;
-            }
+        // If there's already a connection, find the end of the chain
+        if (index > 0) {
+          // Find the last connected block
+          let currentBlock = targetConnection.targetConnection?.getSourceBlock();
+          while (currentBlock && currentBlock.getNextBlock()) {
+            currentBlock = currentBlock.getNextBlock();
           }
-          
-          if (targetConnection && block.previousConnection) {
-            targetConnection.connect(block.previousConnection);
+          if (currentBlock && currentBlock.nextConnection) {
+            targetConnection = currentBlock.nextConnection;
           }
         }
-      });
-    }
+        
+        // Connect the new block
+        if (targetConnection && columnBlock.previousConnection && !targetConnection.targetConnection) {
+          targetConnection.connect(columnBlock.previousConnection);
+        }
+      }
+    });
+
+    // Generate SQL and render workspace
+    const code = javascriptGenerator.workspaceToCode(workspaceRef.current);
+    setGeneratedSql(code || query.sql);
+    workspaceRef.current.render();
   };
 
   const getMockSavedQueries = (): SavedQuery[] => {
@@ -206,6 +217,12 @@ const EnhancedBlocklyEditor: React.FC<EnhancedBlocklyEditorProps> = ({
       }
     ];
   };
+
+  useEffect(() => {
+    if (loadedQuery && workspaceRef.current) {
+      loadQueryIntoWorkspace(loadedQuery);
+    }
+  }, [loadedQuery]);
 
   useEffect(() => {
     if (blocklyDiv.current && !workspaceRef.current) {
